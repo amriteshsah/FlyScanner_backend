@@ -1,6 +1,8 @@
 package com.flyscanner.alerts.api;
 
 import com.flyscanner.account.domain.AccountPrincipal;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import com.flyscanner.alerts.application.PriceAlertService;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
@@ -18,6 +20,8 @@ import java.util.List;
 import java.util.UUID;
 
 @RestController
+@Tag(name = "Price alerts", description = "Create and manage user-specific fare alerts")
+@SecurityRequirement(name = "bearerAuth")
 @RequestMapping("/api/v1/alerts")
 public class PriceAlertController {
 
