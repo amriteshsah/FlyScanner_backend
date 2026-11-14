@@ -1,5 +1,5 @@
 server:
-  port: \${SERVER_PORT:8080}
+  port: ${SERVER_PORT:8080}
   shutdown: graceful
 
 spring:
@@ -11,8 +11,8 @@ spring:
     timeout-per-shutdown-phase: 20s
   datasource:
     hikari:
-      maximum-pool-size: \${DB_POOL_MAX_SIZE:5}
-      minimum-idle: \${DB_POOL_MIN_IDLE:1}
+      maximum-pool-size: ${DB_POOL_MAX_SIZE:5}
+      minimum-idle: ${DB_POOL_MIN_IDLE:1}
       connection-timeout: 3000
       validation-timeout: 1000
   flyway:
