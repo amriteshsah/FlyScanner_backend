@@ -74,6 +74,55 @@ curl -X POST http://localhost:8080/api/v1/searches \\
   }'
 \`\`\`
 
+## Verify persisted data in H2
+
+Each successful call to `POST /api/v1/searches` now stores the search request and returned offer snapshot in the local H2 database within one transaction.
+
+Core search tables:
+
+| Table | Stored data |
+|---|---|
+| `search.flight_searches` | Search header, passengers, market, cabin and outcome |
+| `search.flight_legs` | Outbound and return route legs |
+| `search.search_children` | Child age values supplied with the search |
+| `search.provider_search_statuses` | Supplier status, latency and message |
+| `search.flight_offers` | Price, currency, provider, stops and expiry |
+| `search.flight_journeys` | Journey details for each offer |
+| `search.flight_segments` | Individual flight segments |
+
+Additional module tables are created for future functionality: `account.users`, `affiliate.click_tracking`, `alerts.price_alerts` and `notifications.notification_history`. Those are not populated by the current search flow because login, affiliate redirect, price-alert and notification workflows are not implemented yet.
+
+Use these queries in H2 Console:
+
+```sql
+-- List all application tables
+SELECT TABLE_SCHEMA, TABLE_NAME
+FROM INFORMATION_SCHEMA.TABLES
+WHERE TABLE_SCHEMA IN ('account', 'search', 'affiliate', 'alerts', 'notifications')
+ORDER BY TABLE_SCHEMA, TABLE_NAME;
+
+-- Recent searches
+SELECT * FROM search.flight_searches
+ORDER BY created_at DESC;
+
+-- Offers returned for each search
+SELECT search_id, offer_token, provider_code, price_amount, price_currency,
+       stop_count, total_duration_minutes, checked_at, expires_at
+FROM search.flight_offers
+ORDER BY created_at DESC, price_amount;
+
+-- Flight segments for an offer
+SELECT * FROM search.flight_segments
+WHERE offer_token = '<copy an offer_token from search.flight_offers>'
+ORDER BY leg_number, segment_number;
+
+-- Provider outcome for each search
+SELECT * FROM search.provider_search_statuses
+ORDER BY search_id;
+```
+
+The local H2 database is in-memory. Data is cleared when the backend JVM stops. Search persistence is implemented for the current mock supplier; before retaining real supplier responses, confirm the supplier's data-storage and retention terms.
+
 ## Run PostgreSQL compatibility check
 
 The \`postgres\` Spring profile is retained and is used by Docker Compose. This lets us verify the same Flyway migrations and application against PostgreSQL before Phase 1 is closed.
