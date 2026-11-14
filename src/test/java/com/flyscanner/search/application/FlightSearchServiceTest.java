@@ -73,6 +73,25 @@ class FlightSearchServiceTest {
     }
 
     @Test
+    void calculatesTheSyntheticTotalForAllPassengers() {
+        LocalDate departure = LocalDate.now(clock).plusDays(20);
+        FlightSearchRequest request = new FlightSearchRequest(
+                TripType.ONE_WAY,
+                List.of(new FlightLegRequest("BLR", "DXB", departure)),
+                new PassengerRequest(2, List.of(6), 0),
+                CabinClass.ECONOMY,
+                "INR",
+                "IN",
+                "en-IN"
+        );
+
+        var response = service.search(request);
+
+        assertEquals(3, response.offers().size());
+        assertEquals(25_300L, response.offers().getFirst().price().amount().longValueExact());
+    }
+
+    @Test
     void rejectsRoundTripWithOnlyOneLeg() {
         var request = request(TripType.ROUND_TRIP,
                 List.of(new FlightLegRequest("BLR", "DXB", LocalDate.now(clock).plusDays(20))));

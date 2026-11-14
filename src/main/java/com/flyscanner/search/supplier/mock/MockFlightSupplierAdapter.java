@@ -41,6 +41,9 @@ public class MockFlightSupplierAdapter implements FlightSupplierAdapter {
 
         Instant checkedAt = Instant.now();
         int[] prices = request.legs().size() == 2 ? ROUND_TRIP_PRICES_INR : ONE_WAY_PRICES_INR;
+        int partySize = request.passengers().adults()
+                + request.passengers().childrenAges().size()
+                + request.passengers().infants();
         List<SupplierOffer> offers = new ArrayList<>();
 
         for (int option = 0; option < prices.length; option++) {
@@ -57,7 +60,8 @@ public class MockFlightSupplierAdapter implements FlightSupplierAdapter {
 
             offers.add(new SupplierOffer(
                     "MOCK-" + UUID.randomUUID(),
-                    new Money(BigDecimal.valueOf(prices[option]).setScale(2), "INR"),
+                    // Illustrative fixture only: all passengers are priced equally here.
+                    new Money(BigDecimal.valueOf((long) prices[option] * partySize).setScale(2), "INR"),
                     journeys,
                     totalStops,
                     totalDuration,
