@@ -40,13 +40,14 @@ public class AccountAuthenticationService {
         }
 
         UUID userId = UUID.randomUUID();
+        String normalizedName = fullName.trim();
         String passwordHash = passwordEncoder.encode(password);
         try {
-            accounts.insert(userId, normalizedEmail, fullName.trim(), passwordHash, clock.instant());
+            accounts.insert(userId, normalizedEmail, normalizedName, passwordHash, clock.instant());
         } catch (DuplicateKeyException exception) {
             throw new EmailAlreadyRegisteredException();
         }
-        return issueResult(userId, normalizedEmail, fullName.trim());
+        return issueResult(userId, normalizedEmail, normalizedName);
     }
 
     @Transactional
@@ -59,14 +60,33 @@ public class AccountAuthenticationService {
         return issueResult(account.id(), account.email(), account.fullName());
     }
 
+    @Transactional(readOnly = true)
     public AccountPrincipal getProfile(AccountPrincipal principal) {
-        return principal;
+        return accounts.findById(principal.userId())
+                .map(this::toPrincipal)
+                .orElseThrow(() -> new BadCredentialsException("Account is no longer active."));
+    }
+
+    @Transactional
+    public AccountPrincipal updateProfile(AccountPrincipal principal, String fullName) {
+        String normalizedName = fullName.trim();
+        if (!accounts.updateFullName(principal.userId(), normalizedName, clock.instant())) {
+            throw new BadCredentialsException("Account is no longer active.");
+        }
+        return accounts.findById(principal.userId())
+                .map(this::toPrincipal)
+                .orElseThrow(() -> new BadCredentialsException("Account is no longer active."));
     }
 
     public void logout(String authorizationHeader) {
         if (authorizationHeader != null && authorizationHeader.regionMatches(true, 0, "Bearer ", 0, 7)) {
             tokens.revoke(authorizationHeader.substring(7).trim());
         }
+    }
+
+    private AccountPrincipal toPrincipal(AccountRecord account) {
+        return new AccountPrincipal(account.id(), account.email(), account.fullName(),
+                account.role(), account.createdAt());
     }
 
     private AuthenticationResult issueResult(UUID userId, String email, String fullName) {
