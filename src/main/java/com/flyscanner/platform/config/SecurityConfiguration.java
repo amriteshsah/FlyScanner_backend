@@ -36,6 +36,7 @@ public class SecurityConfiguration {
                         .requestMatchers("/actuator/health/**", "/api/v1/system/**").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/v1/auth/register", "/api/v1/auth/login").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/v1/searches").permitAll()
+                        .requestMatchers("/api/v1/admin/**").hasRole("ADMIN")
                         .anyRequest().authenticated())
                 .addFilterBefore(new BearerTokenAuthenticationFilter(tokens), UsernamePasswordAuthenticationFilter.class)
                 .build();
