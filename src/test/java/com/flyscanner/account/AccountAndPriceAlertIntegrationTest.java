@@ -74,6 +74,23 @@ class AccountAndPriceAlertIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.email").value(email));
 
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch("/api/v1/auth/me")
+                        .header("Authorization", "Bearer " + accessToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"fullName":"Updated FlyScanner User","email":"ignored@example.test","role":"ADMIN"}
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.fullName").value("Updated FlyScanner User"))
+                .andExpect(jsonPath("$.email").value(email))
+                .andExpect(jsonPath("$.role").value("USER"))
+                .andExpect(jsonPath("$.createdAt").isNotEmpty());
+
+        mockMvc.perform(get("/api/v1/auth/me")
+                        .header("Authorization", "Bearer " + accessToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.fullName").value("Updated FlyScanner User"));
+
         mockMvc.perform(post("/api/v1/auth/login")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
