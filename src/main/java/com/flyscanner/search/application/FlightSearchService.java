@@ -9,6 +9,7 @@ import com.flyscanner.search.domain.ProviderCallStatus;
 import com.flyscanner.search.domain.SupplierOffer;
 import com.flyscanner.search.domain.SupplierSearchResult;
 import com.flyscanner.search.supplier.FlightSupplierAdapter;
+import com.flyscanner.search.persistence.FlightSearchResultRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Qualifier;
@@ -40,16 +41,19 @@ public class FlightSearchService {
     private final Executor supplierSearchExecutor;
     private final Clock clock;
     private final Duration providerTimeout;
+    private final FlightSearchResultRepository resultRepository;
 
     public FlightSearchService(
             List<FlightSupplierAdapter> adapters,
             @Qualifier("supplierSearchExecutor") Executor supplierSearchExecutor,
             Clock clock,
-            @Value("$" + "{flyscanner.search.provider-timeout:3s}") Duration providerTimeout) {
+            @Value("$" + "{flyscanner.search.provider-timeout:3s}") Duration providerTimeout,
+            FlightSearchResultRepository resultRepository) {
         this.adapters = List.copyOf(adapters);
         this.supplierSearchExecutor = supplierSearchExecutor;
         this.clock = clock;
         this.providerTimeout = providerTimeout;
+        this.resultRepository = resultRepository;
     }
 
     public FlightSearchResponse search(FlightSearchRequest request) {
@@ -77,7 +81,7 @@ public class FlightSearchService {
                         .thenComparingInt(FlightOfferResponse::totalDurationMinutes))
                 .toList();
 
-        return new FlightSearchResponse(
+        FlightSearchResponse response = new FlightSearchResponse(
                 UUID.randomUUID(),
                 generatedAt,
                 determineStatus(executions, offers),
@@ -85,6 +89,8 @@ public class FlightSearchService {
                 offers,
                 DISCLAIMER
         );
+        resultRepository.save(request, response);
+        return response;
     }
 
     private CompletableFuture<ProviderExecution> executeProvider(
