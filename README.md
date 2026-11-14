@@ -123,6 +123,80 @@ ORDER BY search_id;
 
 The local H2 database is in-memory. Data is cleared when the backend JVM stops. Search persistence is implemented for the current mock supplier; before retaining real supplier responses, confirm the supplier's data-storage and retention terms.
 
+## Account authentication and price alerts
+
+The account and price-alert APIs are available in the current foundation branch.
+
+### Register an account
+
+```bash
+curl -X POST http://localhost:8080/api/v1/auth/register \
+  -H "Content-Type: application/json" \
+  -d '{"email":"traveler@example.com","fullName":"Test Traveler","password":"Use-A-Unique-Password-2026!"}'
+```
+
+Registration returns an opaque bearer access token. Passwords are stored as BCrypt hashes. Access tokens are generated from cryptographically secure random bytes; only SHA-256 token hashes are persisted in `account.access_token_sessions`. Tokens expire after 12 hours by default and can be revoked at logout.
+
+### Login and current profile
+
+```bash
+curl -X POST http://localhost:8080/api/v1/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"email":"traveler@example.com","password":"Use-A-Unique-Password-2026!"}'
+```
+
+Use the returned token on protected endpoints:
+
+```bash
+curl http://localhost:8080/api/v1/auth/me \
+  -H "Authorization: Bearer <access-token>"
+```
+
+### Create, list and deactivate price alerts
+
+```bash
+curl -X POST http://localhost:8080/api/v1/alerts \
+  -H "Authorization: Bearer <access-token>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "origin":"BLR",
+    "destination":"DXB",
+    "tripType":"ONE_WAY",
+    "departureDate":"2027-03-15",
+    "returnDate":null,
+    "targetPrice":8500.00,
+    "currency":"INR",
+    "market":"IN"
+  }'
+
+curl http://localhost:8080/api/v1/alerts \
+  -H "Authorization: Bearer <access-token>"
+
+curl -X PATCH http://localhost:8080/api/v1/alerts/<alert-id>/deactivate \
+  -H "Authorization: Bearer <access-token>"
+```
+
+Alerts are private to the authenticated user. Listing and deactivation always scope by both alert ID and owner ID.
+
+### Logout
+
+```bash
+curl -X POST http://localhost:8080/api/v1/auth/logout \
+  -H "Authorization: Bearer <access-token>"
+```
+
+The token is revoked immediately. Use login to issue a new token.
+
+### Security and current limitations
+
+- Public endpoints: registration, login, flight search and health/system-info endpoints.
+- Protected endpoints: current account profile, logout and all price-alert operations.
+- Password hashing uses BCrypt. Never log or persist submitted passwords.
+- Access tokens are opaque bearer tokens, expire after 12 hours and are stored only as SHA-256 hashes.
+- H2 console remains local-development-only.
+- Add production HTTPS, login/register rate limiting, email verification, password reset, account lockout/abuse controls, CORS allow-list configuration and a refresh-token/device-session policy before public launch.
+- Price-alert records are persisted, but scheduled supplier checks and email/push notifications are not yet implemented. No automatic price monitoring is running yet.
+
 ## Run PostgreSQL compatibility check
 
 The \`postgres\` Spring profile is retained and is used by Docker Compose. This lets us verify the same Flyway migrations and application against PostgreSQL before Phase 1 is closed.
