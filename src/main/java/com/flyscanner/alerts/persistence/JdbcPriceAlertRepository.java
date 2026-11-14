@@ -66,7 +66,7 @@ public class JdbcPriceAlertRepository {
     public Optional<PriceAlertResponse> findByIdAndUser(UUID id, UUID userId) {
         return jdbcTemplate.query("""
                 SELECT id, origin, destination, trip_type, departure_date, return_date,
-                       target_price, currency, is_active, created_at, expires_at
+                       target_price, currency, market, is_active, created_at, expires_at
                 FROM alerts.price_alerts
                 WHERE id = ? AND user_id = ?
                 """, (rs, rowNum) -> new PriceAlertResponse(
@@ -78,6 +78,7 @@ public class JdbcPriceAlertRepository {
                 rs.getDate("return_date") == null ? null : rs.getDate("return_date").toLocalDate(),
                 rs.getBigDecimal("target_price"),
                 rs.getString("currency"),
+                rs.getString("market"),
                 rs.getBoolean("is_active"),
                 rs.getTimestamp("created_at").toInstant(),
                 rs.getTimestamp("expires_at") == null ? null : rs.getTimestamp("expires_at").toInstant()
