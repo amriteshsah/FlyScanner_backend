@@ -16,6 +16,7 @@ public record PriceAlertResponse(
         LocalDate returnDate,
         BigDecimal targetPrice,
         String currency,
+        String market,
         boolean active,
         Instant createdAt,
         Instant expiresAt
