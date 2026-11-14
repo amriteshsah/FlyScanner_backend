@@ -1,11 +1,9 @@
 package com.flyscanner.account;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -15,6 +13,8 @@ import org.springframework.test.web.servlet.MvcResult;
 
 import java.time.LocalDate;
 import java.util.UUID;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -38,9 +38,6 @@ class AccountAndPriceAlertIntegrationTest {
     @Autowired
     private PasswordEncoder passwordEncoder;
 
-    @Autowired
-    private ObjectMapper objectMapper;
-
     @Test
     void registrationLoginAndPriceAlertLifecycleRequireAndUseBearerToken() throws Exception {
         String email = "flyscanner-" + UUID.randomUUID() + "@example.test";
@@ -56,8 +53,9 @@ class AccountAndPriceAlertIntegrationTest {
                 .andExpect(jsonPath("$.accessToken").isNotEmpty())
                 .andReturn();
 
-        JsonNode registrationJson = objectMapper.readTree(registration.getResponse().getContentAsString());
-        String accessToken = registrationJson.get("accessToken").asText();
+        String registrationBody = registration.getResponse().getContentAsString();
+        String accessToken = extractJsonString(registrationBody, "accessToken");
+        UUID userId = UUID.fromString(extractJsonString(registrationBody, "userId"));
 
         String passwordHash = jdbcTemplate.queryForObject(
                 "SELECT password_hash FROM account.users WHERE email = ?",
@@ -69,7 +67,7 @@ class AccountAndPriceAlertIntegrationTest {
                 SELECT LENGTH(token_hash)
                 FROM account.access_token_sessions
                 WHERE user_id = ?
-                """, Integer.class, UUID.fromString(registrationJson.get("userId").asText()));
+                """, Integer.class, userId);
         assertTrue(tokenHashLength != null && tokenHashLength == 64,
                 "Only a SHA-256 token hash should be stored");
 
@@ -107,8 +105,7 @@ class AccountAndPriceAlertIntegrationTest {
                 .andExpect(jsonPath("$.market").value("IN"))
                 .andReturn();
 
-        JsonNode alertJson = objectMapper.readTree(alertResult.getResponse().getContentAsString());
-        String alertId = alertJson.get("id").asText();
+        String alertId = extractJsonString(alertResult.getResponse().getContentAsString(), "id");
 
         mockMvc.perform(get("/api/v1/alerts")
                         .header("Authorization", "Bearer " + accessToken))
@@ -162,5 +159,14 @@ class AccountAndPriceAlertIntegrationTest {
     void priceAlertsCannotBeReadWithoutAuthentication() throws Exception {
         mockMvc.perform(get("/api/v1/alerts"))
                 .andExpect(status().isUnauthorized());
+    }
+
+    private String extractJsonString(String json, String field) {
+        Matcher matcher = Pattern.compile("\\"" + Pattern.quote(field) + "\\"\\s*:\\s*\\"([^\\"]+)\\"")
+                .matcher(json);
+        if (!matcher.find()) {
+            throw new AssertionError("JSON response did not contain string field: " + field);
+        }
+        return matcher.group(1);
     }
 }
