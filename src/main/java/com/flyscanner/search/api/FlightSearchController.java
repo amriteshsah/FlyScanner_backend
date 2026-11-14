@@ -3,6 +3,7 @@ package com.flyscanner.search.api;
 import com.flyscanner.search.api.dto.FlightSearchRequest;
 import com.flyscanner.search.api.dto.FlightSearchResponse;
 import com.flyscanner.search.application.FlightSearchService;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -11,6 +12,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
+@Tag(name = "Flight search", description = "Search mock flight inventory and compare offers")
 @RequestMapping(path = "/api/v1/searches", produces = MediaType.APPLICATION_JSON_VALUE)
 public class FlightSearchController {
 
