@@ -22,13 +22,8 @@ public class SecurityConfiguration {
     }
 
     @Bean
-    BearerTokenAuthenticationFilter bearerTokenAuthenticationFilter(AccessTokenService tokens) {
-        return new BearerTokenAuthenticationFilter(tokens);
-    }
-
-    @Bean
     SecurityFilterChain securityFilterChain(
-            HttpSecurity http, BearerTokenAuthenticationFilter bearerFilter) throws Exception {
+            HttpSecurity http, AccessTokenService tokens) throws Exception {
         return http
                 .csrf(csrf -> csrf.disable())
                 .cors(Customizer.withDefaults())
@@ -42,7 +37,7 @@ public class SecurityConfiguration {
                         .requestMatchers(HttpMethod.POST, "/api/v1/auth/register", "/api/v1/auth/login").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/v1/searches").permitAll()
                         .anyRequest().authenticated())
-                .addFilterBefore(bearerFilter, UsernamePasswordAuthenticationFilter.class)
+                .addFilterBefore(new BearerTokenAuthenticationFilter(tokens), UsernamePasswordAuthenticationFilter.class)
                 .build();
     }
 }
