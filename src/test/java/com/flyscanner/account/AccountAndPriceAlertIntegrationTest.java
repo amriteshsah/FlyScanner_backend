@@ -1,0 +1,166 @@
+package com.flyscanner.account;
+
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.http.MediaType;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.MvcResult;
+
+import java.time.LocalDate;
+import java.util.UUID;
+
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+
+@SpringBootTest
+@AutoConfigureMockMvc
+@ActiveProfiles("local")
+class AccountAndPriceAlertIntegrationTest {
+
+    @Autowired
+    private MockMvc mockMvc;
+
+    @Autowired
+    private JdbcTemplate jdbcTemplate;
+
+    @Autowired
+    private PasswordEncoder passwordEncoder;
+
+    @Autowired
+    private ObjectMapper objectMapper;
+
+    @Test
+    void registrationLoginAndPriceAlertLifecycleRequireAndUseBearerToken() throws Exception {
+        String email = "flyscanner-" + UUID.randomUUID() + "@example.test";
+        String password = "Safe-Development-Password-2026!";
+
+        MvcResult registration = mockMvc.perform(post("/api/v1/auth/register")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"email":"%s","fullName":"FlyScanner Test User","password":"%s"}
+                                """.formatted(email, password)))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.userId").isNotEmpty())
+                .andExpect(jsonPath("$.accessToken").isNotEmpty())
+                .andReturn();
+
+        JsonNode registrationJson = objectMapper.readTree(registration.getResponse().getContentAsString());
+        String accessToken = registrationJson.get("accessToken").asText();
+
+        String passwordHash = jdbcTemplate.queryForObject(
+                "SELECT password_hash FROM account.users WHERE email = ?",
+                String.class, email);
+        assertNotEquals(password, passwordHash);
+        assertTrue(passwordEncoder.matches(password, passwordHash));
+
+        Integer tokenHashLength = jdbcTemplate.queryForObject("""
+                SELECT LENGTH(token_hash)
+                FROM account.access_token_sessions
+                WHERE user_id = ?
+                """, Integer.class, UUID.fromString(registrationJson.get("userId").asText()));
+        assertTrue(tokenHashLength != null && tokenHashLength == 64,
+                "Only a SHA-256 token hash should be stored");
+
+        mockMvc.perform(get("/api/v1/auth/me")
+                        .header("Authorization", "Bearer " + accessToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.email").value(email));
+
+        mockMvc.perform(post("/api/v1/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"email":"%s","password":"%s"}
+                                """.formatted(email, password)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.accessToken").isNotEmpty());
+
+        String departureDate = LocalDate.now().plusDays(40).toString();
+        MvcResult alertResult = mockMvc.perform(post("/api/v1/alerts")
+                        .header("Authorization", "Bearer " + accessToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "origin":"BLR",
+                                  "destination":"DXB",
+                                  "tripType":"ONE_WAY",
+                                  "departureDate":"%s",
+                                  "returnDate":null,
+                                  "targetPrice":8500.00,
+                                  "currency":"INR",
+                                  "market":"IN"
+                                }
+                                """.formatted(departureDate)))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.active").value(true))
+                .andExpect(jsonPath("$.market").value("IN"))
+                .andReturn();
+
+        JsonNode alertJson = objectMapper.readTree(alertResult.getResponse().getContentAsString());
+        String alertId = alertJson.get("id").asText();
+
+        mockMvc.perform(get("/api/v1/alerts")
+                        .header("Authorization", "Bearer " + accessToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].id").value(alertId));
+
+        mockMvc.perform(patch("/api/v1/alerts/" + alertId + "/deactivate")
+                        .header("Authorization", "Bearer " + accessToken))
+                .andExpect(status().isNoContent());
+
+        mockMvc.perform(get("/api/v1/alerts")
+                        .header("Authorization", "Bearer " + accessToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].active").value(false));
+
+        mockMvc.perform(post("/api/v1/auth/logout")
+                        .header("Authorization", "Bearer " + accessToken))
+                .andExpect(status().isNoContent());
+
+        mockMvc.perform(get("/api/v1/alerts")
+                        .header("Authorization", "Bearer " + accessToken))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void duplicateRegistrationReturnsConflictAndWrongPasswordReturnsUnauthorized() throws Exception {
+        String email = "duplicate-" + UUID.randomUUID() + "@example.test";
+        String registerBody = """
+                {"email":"%s","fullName":"Duplicate Test","password":"Safe-Development-Password-2026!"}
+                """.formatted(email);
+
+        mockMvc.perform(post("/api/v1/auth/register")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(registerBody))
+                .andExpect(status().isCreated());
+
+        mockMvc.perform(post("/api/v1/auth/register")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(registerBody))
+                .andExpect(status().isConflict());
+
+        mockMvc.perform(post("/api/v1/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"email":"%s","password":"wrong-password-000"}
+                                """.formatted(email)))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void priceAlertsCannotBeReadWithoutAuthentication() throws Exception {
+        mockMvc.perform(get("/api/v1/alerts"))
+                .andExpect(status().isUnauthorized());
+    }
+}
