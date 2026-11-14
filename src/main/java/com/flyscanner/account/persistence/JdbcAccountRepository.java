@@ -30,7 +30,7 @@ public class JdbcAccountRepository {
 
     public Optional<AccountRecord> findByEmail(String email) {
         return jdbcTemplate.query("""
-                SELECT id, email, full_name, password_hash
+                SELECT id, email, full_name, password_hash, role, created_at
                 FROM account.users
                 WHERE email = ? AND user_status = 'ACTIVE'
                 """,
@@ -38,7 +38,9 @@ public class JdbcAccountRepository {
                         rs.getObject("id", UUID.class),
                         rs.getString("email"),
                         rs.getString("full_name"),
-                        rs.getString("password_hash")
+                        rs.getString("password_hash"),
+                        rs.getString("role"),
+                        rs.getTimestamp("created_at").toInstant()
                 ),
                 email
         ).stream().findFirst();
@@ -46,7 +48,7 @@ public class JdbcAccountRepository {
 
     public Optional<AccountRecord> findById(UUID id) {
         return jdbcTemplate.query("""
-                SELECT id, email, full_name, password_hash
+                SELECT id, email, full_name, password_hash, role, created_at
                 FROM account.users
                 WHERE id = ? AND user_status = 'ACTIVE'
                 """,
@@ -54,9 +56,21 @@ public class JdbcAccountRepository {
                         rs.getObject("id", UUID.class),
                         rs.getString("email"),
                         rs.getString("full_name"),
-                        rs.getString("password_hash")
+                        rs.getString("password_hash"),
+                        rs.getString("role"),
+                        rs.getTimestamp("created_at").toInstant()
                 ),
                 id
         ).stream().findFirst();
+    }
+
+    public boolean updateFullName(UUID id, String fullName, Instant updatedAt) {
+        return jdbcTemplate.update("""
+                UPDATE account.users
+                SET full_name = ?, updated_at = ?
+                WHERE id = ? AND user_status = 'ACTIVE'
+                """,
+                fullName, Timestamp.from(updatedAt), id
+        ) == 1;
     }
 }
