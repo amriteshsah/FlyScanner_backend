@@ -10,3 +10,10 @@ spring:
       path: /h2-console
       settings:
         web-allow-others: false
+
+# Swagger UI is enabled for local API development.
+springdoc:
+  api-docs:
+    enabled: true
+  swagger-ui:
+    enabled: true
