@@ -30,7 +30,7 @@ public class JdbcAccessTokenSessionRepository {
 
     public Optional<AccountPrincipal> findActivePrincipal(String tokenHash, Instant now) {
         return jdbcTemplate.query("""
-                SELECT u.id, u.email, u.full_name
+                SELECT u.id, u.email, u.full_name, u.role, u.created_at
                 FROM account.access_token_sessions s
                 JOIN account.users u ON u.id = s.user_id
                 WHERE s.token_hash = ?
@@ -41,7 +41,9 @@ public class JdbcAccessTokenSessionRepository {
                 (rs, rowNum) -> new AccountPrincipal(
                         rs.getObject("id", UUID.class),
                         rs.getString("email"),
-                        rs.getString("full_name")
+                        rs.getString("full_name"),
+                        rs.getString("role"),
+                        rs.getTimestamp("created_at").toInstant()
                 ),
                 tokenHash, Timestamp.from(now)
         ).stream().findFirst();
