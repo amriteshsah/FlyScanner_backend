@@ -62,7 +62,7 @@ public class JdbcFlightSearchResultRepository implements FlightSearchResultRepos
         saveLegs(searchId, request.legs());
         saveChildren(searchId, request.passengers().childrenAges());
         saveProviderStatuses(searchId, response.providerStatuses());
-        saveOffers(searchId, response.offers(), createdAt);
+        saveOffers(response.offers(), searchId, createdAt);
     }
 
     private void saveLegs(UUID searchId, List<FlightLegRequest> legs) {
