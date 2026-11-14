@@ -8,6 +8,7 @@ import com.flyscanner.search.domain.FlightSearchStatus;
 import com.flyscanner.search.domain.ProviderCallStatus;
 import com.flyscanner.search.domain.TripType;
 import com.flyscanner.search.supplier.mock.MockFlightSupplierAdapter;
+import com.flyscanner.search.persistence.FlightSearchResultRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -22,20 +23,25 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 
 class FlightSearchServiceTest {
 
     private Clock clock;
     private FlightSearchService service;
+    private FlightSearchResultRepository resultRepository;
 
     @BeforeEach
     void setUp() {
         clock = Clock.fixed(Instant.parse("2026-11-14T02:00:00Z"), ZoneOffset.UTC);
+        resultRepository = mock(FlightSearchResultRepository.class);
         service = new FlightSearchService(
                 List.of(new MockFlightSupplierAdapter()),
                 Runnable::run,
                 clock,
-                Duration.ofSeconds(3)
+                Duration.ofSeconds(3),
+                resultRepository
         );
     }
 
@@ -55,6 +61,18 @@ class FlightSearchServiceTest {
         assertEquals(1, response.offers().getFirst().itinerary().size());
         assertFalse(response.offers().getFirst().affiliateRedirectAvailable());
         assertTrue(response.disclaimer().contains("MOCK DATA ONLY"));
+    }
+
+    @Test
+    void persistsTheSearchRequestAndResponse() {
+        FlightSearchRequest request = request(
+                TripType.ONE_WAY,
+                List.of(new FlightLegRequest("BLR", "DXB", LocalDate.now(clock).plusDays(20)))
+        );
+
+        var response = service.search(request);
+
+        verify(resultRepository).save(request, response);
     }
 
     @Test
