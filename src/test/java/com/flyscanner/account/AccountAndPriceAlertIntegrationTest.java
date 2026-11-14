@@ -91,6 +91,10 @@ class AccountAndPriceAlertIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.fullName").value("Updated FlyScanner User"));
 
+        mockMvc.perform(get("/api/v1/admin/test")
+                        .header("Authorization", "Bearer " + accessToken))
+                .andExpect(status().isForbidden());
+
         mockMvc.perform(post("/api/v1/auth/login")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
