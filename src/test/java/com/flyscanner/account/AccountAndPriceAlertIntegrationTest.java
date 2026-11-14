@@ -13,8 +13,6 @@ import org.springframework.test.web.servlet.MvcResult;
 
 import java.time.LocalDate;
 import java.util.UUID;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -162,11 +160,16 @@ class AccountAndPriceAlertIntegrationTest {
     }
 
     private String extractJsonString(String json, String field) {
-        Matcher matcher = Pattern.compile("\\"" + Pattern.quote(field) + "\\"\\s*:\\s*\\"([^\\"]+)\\"")
-                .matcher(json);
-        if (!matcher.find()) {
+        String marker = "\\\"" + field + "\\":\\\"";
+        int valueStart = json.indexOf(marker);
+        if (valueStart < 0) {
             throw new AssertionError("JSON response did not contain string field: " + field);
         }
-        return matcher.group(1);
+        valueStart += marker.length();
+        int valueEnd = json.indexOf('\\\"', valueStart);
+        if (valueEnd < 0) {
+            throw new AssertionError("JSON string field was not terminated: " + field);
+        }
+        return json.substring(valueStart, valueEnd);
     }
 }
