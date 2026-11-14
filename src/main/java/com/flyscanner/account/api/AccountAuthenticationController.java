@@ -5,7 +5,9 @@ import com.flyscanner.account.domain.AccountPrincipal;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
@@ -36,9 +38,15 @@ public class AccountAuthenticationController {
     }
 
     @GetMapping("/me")
-    public AccountPrincipal me(@org.springframework.security.core.annotation.AuthenticationPrincipal
-                               AccountPrincipal principal) {
+    public AccountPrincipal me(@AuthenticationPrincipal AccountPrincipal principal) {
         return authenticationService.getProfile(principal);
+    }
+
+    @PatchMapping("/me")
+    public AccountPrincipal updateProfile(
+            @AuthenticationPrincipal AccountPrincipal principal,
+            @Valid @RequestBody UpdateProfileRequest request) {
+        return authenticationService.updateProfile(principal, request.fullName());
     }
 
     @PostMapping("/logout")
