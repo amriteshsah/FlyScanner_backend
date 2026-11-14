@@ -24,17 +24,17 @@ public class JdbcPriceAlertRepository {
     public PriceAlertResponse insert(
             UUID id, UUID userId, String origin, String destination, TripType tripType,
             java.time.LocalDate departureDate, java.time.LocalDate returnDate,
-            java.math.BigDecimal targetPrice, String currency, Instant createdAt, Instant expiresAt) {
+            java.math.BigDecimal targetPrice, String currency, String market, Instant createdAt, Instant expiresAt) {
         jdbcTemplate.update("""
                 INSERT INTO alerts.price_alerts (
                     id, user_id, origin, destination, trip_type, departure_date,
-                    return_date, target_price, currency, is_active, created_at, expires_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, TRUE, ?, ?)
+                    return_date, target_price, currency, market, is_active, created_at, expires_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, TRUE, ?, ?)
                 """,
                 id, userId, origin, destination, tripType.name(),
                 Date.valueOf(departureDate),
                 returnDate == null ? null : Date.valueOf(returnDate),
-                targetPrice, currency, Timestamp.from(createdAt),
+                targetPrice, currency, market, Timestamp.from(createdAt),
                 expiresAt == null ? null : Timestamp.from(expiresAt)
         );
         return findByIdAndUser(id, userId).orElseThrow();
@@ -43,7 +43,7 @@ public class JdbcPriceAlertRepository {
     public List<PriceAlertResponse> findAllByUser(UUID userId) {
         return jdbcTemplate.query("""
                 SELECT id, origin, destination, trip_type, departure_date, return_date,
-                       target_price, currency, is_active, created_at, expires_at
+                       target_price, currency, market, is_active, created_at, expires_at
                 FROM alerts.price_alerts
                 WHERE user_id = ?
                 ORDER BY created_at DESC
@@ -56,6 +56,7 @@ public class JdbcPriceAlertRepository {
                 rs.getDate("return_date") == null ? null : rs.getDate("return_date").toLocalDate(),
                 rs.getBigDecimal("target_price"),
                 rs.getString("currency"),
+                rs.getString("market"),
                 rs.getBoolean("is_active"),
                 rs.getTimestamp("created_at").toInstant(),
                 rs.getTimestamp("expires_at") == null ? null : rs.getTimestamp("expires_at").toInstant()
