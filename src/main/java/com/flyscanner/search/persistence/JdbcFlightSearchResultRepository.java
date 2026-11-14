@@ -1,11 +1,11 @@
 package com.flyscanner.search.persistence;
 
-import com.flyscanner.search.api.dto.FlightJourney;
 import com.flyscanner.search.api.dto.FlightLegRequest;
 import com.flyscanner.search.api.dto.FlightOfferResponse;
 import com.flyscanner.search.api.dto.FlightSearchRequest;
 import com.flyscanner.search.api.dto.FlightSearchResponse;
 import com.flyscanner.search.api.dto.ProviderSearchStatus;
+import com.flyscanner.search.domain.FlightJourney;
 import com.flyscanner.search.domain.FlightSegment;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
@@ -13,25 +13,31 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.sql.Date;
 import java.sql.Timestamp;
+import java.time.Clock;
 import java.time.Instant;
 import java.util.List;
+import java.util.UUID;
 
 /**
- * JDBC persistence keeps the first release lightweight and works with both H2 and PostgreSQL.
+ * Persists the search request, supplier status and synthetic/live offer snapshot.
+ * Uses portable JDBC and the same Flyway schema for H2 and PostgreSQL.
  */
 @Repository
 public class JdbcFlightSearchResultRepository implements FlightSearchResultRepository {
 
     private final JdbcTemplate jdbcTemplate;
+    private final Clock clock;
 
-    public JdbcFlightSearchResultRepository(JdbcTemplate jdbcTemplate) {
+    public JdbcFlightSearchResultRepository(JdbcTemplate jdbcTemplate, Clock clock) {
         this.jdbcTemplate = jdbcTemplate;
+        this.clock = clock;
     }
 
     @Override
     @Transactional
     public void save(FlightSearchRequest request, FlightSearchResponse response) {
-        Instant createdAt = Instant.now();
+        UUID searchId = response.searchId();
+        Instant createdAt = clock.instant();
 
         jdbcTemplate.update("""
                 INSERT INTO search.flight_searches (
@@ -39,7 +45,7 @@ public class JdbcFlightSearchResultRepository implements FlightSearchResultRepos
                     adult_count, infant_count, search_status, generated_at, disclaimer, created_at
                 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
-                response.searchId(),
+                searchId,
                 request.tripType().name(),
                 request.cabinClass().name(),
                 request.currency(),
@@ -53,13 +59,13 @@ public class JdbcFlightSearchResultRepository implements FlightSearchResultRepos
                 Timestamp.from(createdAt)
         );
 
-        saveLegs(response.searchId().toString(), request.legs());
-        saveChildren(response.searchId().toString(), request.passengers().childrenAges());
-        saveProviderStatuses(response.searchId().toString(), response.providerStatuses());
-        saveOffers(response.offers());
+        saveLegs(searchId, request.legs());
+        saveChildren(searchId, request.passengers().childrenAges());
+        saveProviderStatuses(searchId, response.providerStatuses());
+        saveOffers(searchId, response.offers(), createdAt);
     }
 
-    private void saveLegs(String searchId, List<FlightLegRequest> legs) {
+    private void saveLegs(UUID searchId, List<FlightLegRequest> legs) {
         for (int index = 0; index < legs.size(); index++) {
             FlightLegRequest leg = legs.get(index);
             jdbcTemplate.update("""
@@ -76,7 +82,7 @@ public class JdbcFlightSearchResultRepository implements FlightSearchResultRepos
         }
     }
 
-    private void saveChildren(String searchId, List<Integer> childAges) {
+    private void saveChildren(UUID searchId, List<Integer> childAges) {
         if (childAges == null) {
             return;
         }
@@ -88,7 +94,7 @@ public class JdbcFlightSearchResultRepository implements FlightSearchResultRepos
         }
     }
 
-    private void saveProviderStatuses(String searchId, List<ProviderSearchStatus> statuses) {
+    private void saveProviderStatuses(UUID searchId, List<ProviderSearchStatus> statuses) {
         for (ProviderSearchStatus status : statuses) {
             jdbcTemplate.update("""
                     INSERT INTO search.provider_search_statuses (
@@ -98,14 +104,13 @@ public class JdbcFlightSearchResultRepository implements FlightSearchResultRepos
                     searchId,
                     status.providerCode(),
                     status.status().name(),
-                    status.durationMillis(),
+                    status.latencyMs(),
                     status.message()
             );
         }
     }
 
-    private void saveOffers(List<FlightOfferResponse> offers) {
-        Instant createdAt = Instant.now();
+    private void saveOffers(List<FlightOfferResponse> offers, UUID searchId, Instant createdAt) {
         for (FlightOfferResponse offer : offers) {
             jdbcTemplate.update("""
                     INSERT INTO search.flight_offers (
@@ -115,7 +120,7 @@ public class JdbcFlightSearchResultRepository implements FlightSearchResultRepos
                     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                     offer.offerToken(),
-                    currentSearchIdForOffer(offer, offers),
+                    searchId,
                     offer.providerCode(),
                     offer.price().amount(),
                     offer.price().currency(),
@@ -129,16 +134,6 @@ public class JdbcFlightSearchResultRepository implements FlightSearchResultRepos
             saveJourneysAndSegments(offer);
         }
     }
-
-    /*
-     * The response object carries the search ID, but offers do not. Set it in the
-     * repository before inserting offers using the active search ID.
-     */
-    private String currentSearchIdForOffer(FlightOfferResponse offer, List<FlightOfferResponse> offers) {
-        return activeSearchId;
-    }
-
-    private String activeSearchId;
 
     private void saveJourneysAndSegments(FlightOfferResponse offer) {
         for (FlightJourney journey : offer.itinerary()) {
