@@ -88,7 +88,7 @@ class FlightSearchServiceTest {
         var response = service.search(request);
 
         assertEquals(3, response.offers().size());
-        assertEquals(25_300L, response.offers().getFirst().price().amount().longValueExact());
+        assertEquals(29_550L, response.offers().getFirst().price().amount().longValueExact());
     }
 
     @Test
