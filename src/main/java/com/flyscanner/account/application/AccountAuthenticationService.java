@@ -52,7 +52,7 @@ public class AccountAuthenticationService {
     @Transactional
     public AuthenticationResult login(String email, String password) {
         AccountRecord account = accounts.findByEmail(normalizeEmail(email))
-                .orElseThrow(BadCredentialsException::new);
+                .orElseThrow(() -> new BadCredentialsException("Invalid email or password."));
         if (!passwordEncoder.matches(password, account.passwordHash())) {
             throw new BadCredentialsException("Invalid email or password.");
         }
