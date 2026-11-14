@@ -19,6 +19,6 @@ public record PriceAlertRequest(
         LocalDate returnDate,
         @NotNull @DecimalMin("0.01") @Digits(integer = 12, fraction = 2) BigDecimal targetPrice,
         @NotBlank @Pattern(regexp = "[A-Z]{3}") String currency,
-        @Size(max = 10) String market
+        @NotBlank @Pattern(regexp = "[A-Z]{2}") String market
 ) {
 }
