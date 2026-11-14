@@ -22,6 +22,7 @@ services:
       dockerfile: Dockerfile
     container_name: flyscanner-backend
     environment:
+      SPRING_PROFILES_ACTIVE: postgres
       DB_URL: jdbc:postgresql://postgres:5432/flyscanner
       DB_USERNAME: flyscanner
       DB_PASSWORD: flyscanner_local_only
