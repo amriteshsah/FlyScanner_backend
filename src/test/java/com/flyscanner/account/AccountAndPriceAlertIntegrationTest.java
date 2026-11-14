@@ -160,13 +160,14 @@ class AccountAndPriceAlertIntegrationTest {
     }
 
     private String extractJsonString(String json, String field) {
-        String marker = "\\\"" + field + "\\":\\\"";
+        String quote = Character.toString(34);
+        String marker = quote + field + quote + ":" + quote;
         int valueStart = json.indexOf(marker);
         if (valueStart < 0) {
             throw new AssertionError("JSON response did not contain string field: " + field);
         }
         valueStart += marker.length();
-        int valueEnd = json.indexOf('\\\"', valueStart);
+        int valueEnd = json.indexOf(34, valueStart);
         if (valueEnd < 0) {
             throw new AssertionError("JSON string field was not terminated: " + field);
         }
