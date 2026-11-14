@@ -37,6 +37,18 @@ class AccountAndPriceAlertIntegrationTest {
     private PasswordEncoder passwordEncoder;
 
     @Test
+    void openApiDocumentIsAvailableWithoutAuthenticationAndDescribesBearerAuth() throws Exception {
+        mockMvc.perform(get("/v3/api-docs"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.info.title").value("FlyScanner API"))
+                .andExpect(jsonPath("$.components.securitySchemes.bearerAuth.type").value("http"))
+                .andExpect(jsonPath("$.components.securitySchemes.bearerAuth.scheme").value("bearer"))
+                .andExpect(jsonPath("$.paths['/api/v1/auth/register'].post").exists())
+                .andExpect(jsonPath("$.paths['/api/v1/auth/me'].get.security[0].bearerAuth").exists())
+                .andExpect(jsonPath("$.paths['/api/v1/alerts'].get.security[0].bearerAuth").exists());
+    }
+
+    @Test
     void registrationLoginAndPriceAlertLifecycleRequireAndUseBearerToken() throws Exception {
         String email = "flyscanner-" + UUID.randomUUID() + "@example.test";
         String password = "Safe-Development-Password-2026!";
