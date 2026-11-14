@@ -37,6 +37,17 @@ mvn spring-boot:run
 
 Spring Boot uses the \`local\` profile by default and creates an in-memory H2 database. The database is recreated when the JVM starts.
 
+### Open the H2 database console
+
+While the application is running with the local profile, open:
+
+- URL: http://localhost:8080/h2-console
+- JDBC URL: jdbc:h2:mem:flyscanner;MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE
+- User name: sa
+- Password: leave blank
+
+The H2 console is enabled only in application-local.yml. Do not enable it in production or expose it outside your local machine.
+
 Check health and API:
 
 \`\`\`bash
