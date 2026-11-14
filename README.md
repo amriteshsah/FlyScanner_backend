@@ -7,7 +7,7 @@ The first release is a modular monolith: one deployable Spring Boot application 
 ## Current scope
 
 - Spring Boot 4.1.2 and Java 21
-- Spring MVC REST API and Actuator health probes
+- Spring MVC REST API, Actuator health probes and Swagger UI / OpenAPI documentation
 - H2 in-memory database for default local development
 - PostgreSQL profile retained for compatibility testing and deployment
 - Flyway migrations shared across database profiles
@@ -47,6 +47,18 @@ While the application is running with the local profile, open:
 - Password: leave blank
 
 The H2 console is enabled only in application-local.yml. Do not enable it in production or expose it outside your local machine.
+
+### Open Swagger UI
+
+Start the backend with the default `local` profile, then open:
+
+- Swagger UI: http://localhost:8080/swagger-ui.html
+- OpenAPI JSON: http://localhost:8080/v3/api-docs
+- OpenAPI YAML: http://localhost:8080/v3/api-docs.yaml
+
+Swagger UI includes the account, flight-search and price-alert endpoints. Use the **Authorize** control and enter the access token returned by registration or login to try protected profile and price-alert operations. The HTTP bearer scheme adds the `Bearer` prefix automatically.
+
+The docs endpoints are enabled by default only in the `local` profile. In another profile they remain disabled unless `SWAGGER_ENABLED=true` is configured. Keep API documentation disabled in production unless there is an approved access-control policy for it.
 
 Check health and API:
 
@@ -268,7 +280,9 @@ Local Compose credentials are only for development. Never reuse them in shared e
 
 ## API documentation
 
-See \`docs/architecture/flight-search-api.md\` for request rules, response status semantics and limitations.
+Interactive endpoint documentation is available through Swagger UI when enabled (see the local setup section above). The OpenAPI definition is generated from the Spring MVC controllers and request/response models.
+
+See `docs/architecture/flight-search-api.md` for flight-search request rules, response status semantics and limitations.
 
 ## Architecture rules
 
