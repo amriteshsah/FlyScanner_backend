@@ -1,0 +1,36 @@
+services:
+  postgres:
+    image: postgres:17-alpine
+    container_name: flyscanner-postgres
+    environment:
+      POSTGRES_DB: flyscanner
+      POSTGRES_USER: flyscanner
+      POSTGRES_PASSWORD: flyscanner_local_only
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - flyscanner-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U flyscanner -d flyscanner"]
+      interval: 5s
+      timeout: 3s
+      retries: 15
+    restart: unless-stopped
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: flyscanner-backend
+    environment:
+      DB_URL: jdbc:postgresql://postgres:5432/flyscanner
+      DB_USERNAME: flyscanner
+      DB_PASSWORD: flyscanner_local_only
+      DB_POOL_MAX_SIZE: 5
+    ports:
+      - "127.0.0.1:8080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+volumes:
+  flyscanner-postgres-data:
