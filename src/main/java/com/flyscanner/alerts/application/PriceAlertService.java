@@ -44,7 +44,7 @@ public class PriceAlertService {
         return alerts.insert(UUID.randomUUID(), principal.userId(),
                 request.origin(), request.destination(), request.tripType(),
                 request.departureDate(), request.returnDate(), request.targetPrice(),
-                request.currency(), now, request.departureDate().atStartOfDay()
+                request.currency(), request.market(), now, request.departureDate().atStartOfDay()
                         .plusDays(1).toInstant(java.time.ZoneOffset.UTC));
     }
 
