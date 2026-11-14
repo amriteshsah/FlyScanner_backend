@@ -38,7 +38,7 @@ public class SecurityConfiguration {
                         (request, response, exception) -> response.sendError(401, "Authentication required")))
                 .authorizeHttpRequests(authorize -> authorize
                         .requestMatchers("/h2-console/**").permitAll()
-                        .requestMatchers("/actuator/health/**").permitAll()
+                        .requestMatchers("/actuator/health/**", "/api/v1/system/**").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/v1/auth/register", "/api/v1/auth/login").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/v1/searches").permitAll()
                         .anyRequest().authenticated())
