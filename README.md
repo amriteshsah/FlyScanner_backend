@@ -60,6 +60,8 @@ Swagger UI includes the account, flight-search and price-alert endpoints. Use th
 
 The docs endpoints are enabled by default only in the `local` profile. In another profile they remain disabled unless `SWAGGER_ENABLED=true` is configured. Keep API documentation disabled in production unless there is an approved access-control policy for it.
 
+The local profile allows browser requests from `http://localhost:*`, `http://127.0.0.1:*` and GitHub Codespaces forwarded origins matching `https://*.app.github.dev`. CORS is not wildcard-enabled for arbitrary origins. For a deployed environment, set `FLYSCANNER_CORS_ALLOWED_ORIGIN_PATTERNS` to a comma-separated allow-list of trusted frontend origins (and separately decide whether Swagger should be enabled). Swagger's OpenAPI server URL is relative so requests use the same HTTPS origin as the documentation page.
+
 Check health and API:
 
 \`\`\`bash
