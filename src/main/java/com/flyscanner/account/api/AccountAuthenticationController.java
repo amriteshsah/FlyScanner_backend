@@ -56,7 +56,15 @@ public class AccountAuthenticationController {
     public AccountPrincipal updateProfile(
             @AuthenticationPrincipal AccountPrincipal principal,
             @Valid @RequestBody UpdateProfileRequest request) {
-        return authenticationService.updateProfile(principal, request.fullName());
+        return authenticationService.updateProfile(
+                principal,
+                request.fullName(),
+                request.phoneNumber(),
+                request.dateOfBirth(),
+                request.nationality(),
+                request.homeAirport(),
+                request.preferredCurrency()
+        );
     }
 
     @Operation(summary = "Log out and revoke the current access token")
