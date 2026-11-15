@@ -9,7 +9,7 @@ import java.time.LocalDate;
 
 public record UpdateProfileRequest(
         @NotBlank @Size(min = 2, max = 200) String fullName,
-        @Pattern(regexp = "^$|^\\\\+?[0-9 ()-]{7,20}$",
+        @Pattern(regexp = "^$|^\\+?[0-9 ()-]{7,20}$",
                 message = "must be a valid phone number")
         String phoneNumber,
         @Past(message = "must be a date in the past")
