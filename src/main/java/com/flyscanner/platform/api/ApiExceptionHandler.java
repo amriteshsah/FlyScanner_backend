@@ -8,6 +8,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.security.core.AuthenticationException;
 import com.flyscanner.account.application.AccountAuthenticationService;
 import com.flyscanner.alerts.application.PriceAlertService;
+import com.flyscanner.saved.application.SavedFlightService;
 import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.MethodArgumentNotValidException;
@@ -59,6 +60,18 @@ public class ApiExceptionHandler {
     public ResponseEntity<ProblemDetail> handleAlertNotFound(
             PriceAlertService.AlertNotFoundException exception, HttpServletRequest request) {
         return problem(HttpStatus.NOT_FOUND, "Price alert not found", exception.getMessage(), request);
+    }
+
+    @ExceptionHandler(SavedFlightService.SavedOfferNotFoundException.class)
+    public ResponseEntity<ProblemDetail> handleSavedOfferNotFound(
+            SavedFlightService.SavedOfferNotFoundException exception, HttpServletRequest request) {
+        return problem(HttpStatus.NOT_FOUND, "Flight offer not found", exception.getMessage(), request);
+    }
+
+    @ExceptionHandler(SavedFlightService.SavedFlightNotFoundException.class)
+    public ResponseEntity<ProblemDetail> handleSavedFlightNotFound(
+            SavedFlightService.SavedFlightNotFoundException exception, HttpServletRequest request) {
+        return problem(HttpStatus.NOT_FOUND, "Saved flight not found", exception.getMessage(), request);
     }
 
     @ExceptionHandler(Exception.class)
