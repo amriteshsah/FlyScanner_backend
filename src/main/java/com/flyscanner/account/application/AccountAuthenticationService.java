@@ -68,9 +68,30 @@ public class AccountAuthenticationService {
     }
 
     @Transactional
-    public AccountPrincipal updateProfile(AccountPrincipal principal, String fullName) {
+    public AccountPrincipal updateProfile(
+            AccountPrincipal principal,
+            String fullName,
+            String phoneNumber,
+            java.time.LocalDate dateOfBirth,
+            String nationality,
+            String homeAirport,
+            String preferredCurrency) {
+
         String normalizedName = fullName.trim();
-        if (!accounts.updateFullName(principal.userId(), normalizedName, clock.instant())) {
+        String normalizedPhone = normalizeOptional(phoneNumber);
+        String normalizedNationality = normalizeCode(nationality);
+        String normalizedHomeAirport = normalizeCode(homeAirport);
+        String normalizedCurrency = normalizeCode(preferredCurrency);
+
+        if (!accounts.updateProfile(
+                principal.userId(),
+                normalizedName,
+                normalizedPhone,
+                dateOfBirth,
+                normalizedNationality,
+                normalizedHomeAirport,
+                normalizedCurrency,
+                clock.instant())) {
             throw new BadCredentialsException("Account is no longer active.");
         }
         return accounts.findById(principal.userId())
@@ -85,8 +106,10 @@ public class AccountAuthenticationService {
     }
 
     private AccountPrincipal toPrincipal(AccountRecord account) {
-        return new AccountPrincipal(account.id(), account.email(), account.fullName(),
-                account.role(), account.createdAt());
+        return new AccountPrincipal(
+                account.id(), account.email(), account.fullName(), account.role(), account.createdAt(),
+                account.phoneNumber(), account.dateOfBirth(), account.nationality(),
+                account.homeAirport(), account.preferredCurrency());
     }
 
     private AuthenticationResult issueResult(UUID userId, String email, String fullName) {
@@ -96,6 +119,18 @@ public class AccountAuthenticationService {
 
     private String normalizeEmail(String email) {
         return email.trim().toLowerCase(Locale.ROOT);
+    }
+
+    private String normalizeOptional(String value) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        return value.trim();
+    }
+
+    private String normalizeCode(String value) {
+        String normalized = normalizeOptional(value);
+        return normalized == null ? null : normalized.toUpperCase(Locale.ROOT);
     }
 
     public record AuthenticationResult(
