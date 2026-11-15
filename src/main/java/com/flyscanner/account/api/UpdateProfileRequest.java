@@ -9,15 +9,19 @@ import java.time.LocalDate;
 
 public record UpdateProfileRequest(
         @NotBlank @Size(min = 2, max = 200) String fullName,
-        @Pattern(regexp = "^\\+?[0-9 ()-]{7,20}$", message = "must be a valid phone number")
+        @Pattern(regexp = "^$|^\\\\+?[0-9 ()-]{7,20}$",
+                message = "must be a valid phone number")
         String phoneNumber,
         @Past(message = "must be a date in the past")
         LocalDate dateOfBirth,
-        @Pattern(regexp = "(?i)^[A-Z]{2}$", message = "must be a two-letter country code")
+        @Pattern(regexp = "(?i)^$|^[A-Z]{2}$",
+                message = "must be a two-letter country code")
         String nationality,
-        @Pattern(regexp = "(?i)^[A-Z]{3}$", message = "must be a three-letter IATA airport code")
+        @Pattern(regexp = "(?i)^$|^[A-Z]{3}$",
+                message = "must be a three-letter IATA airport code")
         String homeAirport,
-        @Pattern(regexp = "(?i)^[A-Z]{3}$", message = "must be a three-letter currency code")
+        @Pattern(regexp = "(?i)^$|^[A-Z]{3}$",
+                message = "must be a three-letter currency code")
         String preferredCurrency
 ) {
 }
