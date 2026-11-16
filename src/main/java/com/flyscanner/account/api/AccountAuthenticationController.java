@@ -1,6 +1,7 @@
 package com.flyscanner.account.api;
 
 import com.flyscanner.account.application.AccountAuthenticationService;
+import com.flyscanner.account.application.EmailOtpAuthenticationService;
 import com.flyscanner.account.domain.AccountPrincipal;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
@@ -24,9 +25,13 @@ import org.springframework.web.bind.annotation.RestController;
 public class AccountAuthenticationController {
 
     private final AccountAuthenticationService authenticationService;
+    private final EmailOtpAuthenticationService emailOtpAuthenticationService;
 
-    public AccountAuthenticationController(AccountAuthenticationService authenticationService) {
+    public AccountAuthenticationController(
+            AccountAuthenticationService authenticationService,
+            EmailOtpAuthenticationService emailOtpAuthenticationService) {
         this.authenticationService = authenticationService;
+        this.emailOtpAuthenticationService = emailOtpAuthenticationService;
     }
 
     @Operation(summary = "Register a new FlyScanner account")
@@ -41,6 +46,26 @@ public class AccountAuthenticationController {
     @PostMapping("/login")
     public AuthenticationResponse login(@Valid @RequestBody LoginRequest request) {
         return toResponse(authenticationService.login(request.email(), request.password()));
+    }
+
+    @Operation(summary = "Request a one-time email sign-in code")
+    @PostMapping("/otp/request")
+    @ResponseStatus(HttpStatus.ACCEPTED)
+    public EmailOtpRequestResponse requestEmailOtp(@Valid @RequestBody EmailOtpRequest request) {
+        return emailOtpAuthenticationService.requestCode(request.email());
+    }
+
+    @Operation(summary = "Resend the email sign-in code after the resend cooldown")
+    @PostMapping("/otp/resend")
+    @ResponseStatus(HttpStatus.ACCEPTED)
+    public EmailOtpRequestResponse resendEmailOtp(@Valid @RequestBody EmailOtpRequest request) {
+        return emailOtpAuthenticationService.resendCode(request.email());
+    }
+
+    @Operation(summary = "Verify an email sign-in code and create an authenticated session")
+    @PostMapping("/otp/verify")
+    public AuthenticationResponse verifyEmailOtp(@Valid @RequestBody VerifyEmailOtpRequest request) {
+        return toResponse(emailOtpAuthenticationService.verifyCode(request.email(), request.code()));
     }
 
     @Operation(summary = "Get the currently authenticated user's profile")
