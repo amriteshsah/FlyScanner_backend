@@ -47,7 +47,7 @@ public class ApiExceptionHandler {
     public ResponseEntity<ProblemDetail> handleAuthentication(
             AuthenticationException exception, HttpServletRequest request) {
         return problem(HttpStatus.UNAUTHORIZED, "Authentication failed",
-                "Invalid email or password, or the access token is invalid or expired.", request);
+                "Authentication credentials or the sign-in code are invalid or expired.", request);
     }
 
     @ExceptionHandler(AccountAuthenticationService.EmailAlreadyRegisteredException.class)
