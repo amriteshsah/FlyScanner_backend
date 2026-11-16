@@ -9,6 +9,7 @@ import org.springframework.security.core.AuthenticationException;
 import com.flyscanner.account.application.AccountAuthenticationService;
 import com.flyscanner.alerts.application.PriceAlertService;
 import com.flyscanner.saved.application.SavedFlightService;
+import com.flyscanner.account.otp.SmtpLoginOtpEmailSender;
 import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.MethodArgumentNotValidException;
@@ -72,6 +73,13 @@ public class ApiExceptionHandler {
     public ResponseEntity<ProblemDetail> handleSavedFlightNotFound(
             SavedFlightService.SavedFlightNotFoundException exception, HttpServletRequest request) {
         return problem(HttpStatus.NOT_FOUND, "Saved flight not found", exception.getMessage(), request);
+    }
+
+    @ExceptionHandler(SmtpLoginOtpEmailSender.OtpEmailDeliveryException.class)
+    public ResponseEntity<ProblemDetail> handleOtpDeliveryUnavailable(
+            SmtpLoginOtpEmailSender.OtpEmailDeliveryException exception, HttpServletRequest request) {
+        return problem(HttpStatus.SERVICE_UNAVAILABLE, "Email delivery unavailable",
+                "The sign-in email could not be sent. Please try again later.", request);
     }
 
     @ExceptionHandler(Exception.class)
