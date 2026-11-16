@@ -14,7 +14,7 @@ import java.time.format.DateTimeFormatter;
 public class SmtpLoginOtpEmailSender implements LoginOtpEmailSender {
 
     private static final DateTimeFormatter EXPIRY_FORMAT =
-            DateTimeFormatter.ofPattern("dd MMM yyyy, HH:mm z").withZone(ZoneId.of("UTC"));
+            DateTimeFormatter.ofPattern("dd MMM yyyy, HH:mm 'UTC'").withZone(ZoneId.of("UTC"));
 
     private final ObjectProvider<JavaMailSender> mailSenders;
     private final String fromAddress;
@@ -43,7 +43,7 @@ public class SmtpLoginOtpEmailSender implements LoginOtpEmailSender {
 
                 Your FlyScanner sign-in code is: %s
 
-                This code expires in 5 minutes (at %s UTC) and can only be used once.
+                This code expires in 5 minutes (at %s) and can only be used once.
                 For your security, do not share this code with anyone.
 
                 If you did not request this code, you can ignore this email.
