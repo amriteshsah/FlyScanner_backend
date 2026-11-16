@@ -16,6 +16,7 @@ import org.springframework.test.web.servlet.MvcResult;
 
 import java.time.Duration;
 import java.time.Instant;
+import java.time.OffsetDateTime;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
@@ -62,8 +63,8 @@ class EmailOtpAuthenticationIntegrationTest {
         assertEquals(1, emailSender.sentCount(email));
 
         Map<String, Object> challenge = challengeFor(email);
-        Instant sentAt = ((java.sql.Timestamp) challenge.get("SENT_AT")).toInstant();
-        Instant expiresAt = ((java.sql.Timestamp) challenge.get("EXPIRES_AT")).toInstant();
+        Instant sentAt = ((OffsetDateTime) challenge.get("SENT_AT")).toInstant();
+        Instant expiresAt = ((OffsetDateTime) challenge.get("EXPIRES_AT")).toInstant();
         assertEquals(Duration.ofMinutes(5), Duration.between(sentAt, expiresAt));
         assertNotEquals(originalOtp, challenge.get("OTP_HASH").toString());
 
@@ -142,11 +143,13 @@ class EmailOtpAuthenticationIntegrationTest {
                 .andExpect(status().isAccepted());
 
         String otp = emailSender.latestCode(email);
+        Instant expiredSentAt = Instant.now().minus(Duration.ofMinutes(6));
         jdbcTemplate.update("""
                 UPDATE account.email_login_otps
-                SET expires_at = ?
+                SET sent_at = ?, expires_at = ?
                 WHERE user_id = (SELECT id FROM account.users WHERE email = ?)
-                """, java.sql.Timestamp.from(Instant.now().minusSeconds(1)), email);
+                """, java.sql.Timestamp.from(expiredSentAt),
+                java.sql.Timestamp.from(Instant.now().minusSeconds(1)), email);
 
         mockMvc.perform(post("/api/v1/auth/otp/verify")
                         .contentType(MediaType.APPLICATION_JSON)
