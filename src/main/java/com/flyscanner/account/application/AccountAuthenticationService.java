@@ -10,6 +10,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Clock;
+import java.time.Instant;
+import java.time.LocalDate;
 import java.util.Locale;
 import java.util.UUID;
 
@@ -32,13 +34,11 @@ public class AccountAuthenticationService {
         this.clock = clock;
     }
 
+    /** Used only for controlled account provisioning, not by a public registration endpoint. */
     @Transactional
     public AuthenticationResult register(String email, String fullName, String password) {
         String normalizedEmail = normalizeEmail(email);
-        if (accounts.findByEmail(normalizedEmail).isPresent()) {
-            throw new EmailAlreadyRegisteredException();
-        }
-
+        if (accounts.findByEmail(normalizedEmail).isPresent()) throw new EmailAlreadyRegisteredException();
         UUID userId = UUID.randomUUID();
         String normalizedName = fullName.trim();
         String passwordHash = passwordEncoder.encode(password);
@@ -47,17 +47,48 @@ public class AccountAuthenticationService {
         } catch (DuplicateKeyException exception) {
             throw new EmailAlreadyRegisteredException();
         }
-        return issueResult(userId, normalizedEmail, normalizedName);
+        return issueResult(userId, normalizedEmail, normalizedName, false, true);
+    }
+
+    /**
+     * Admin portal first factor only. The future Admin flow must also verify
+     * email OTP before issuing an authenticated session.
+     */
+    @Transactional(readOnly = true)
+    public boolean verifyAdminPassword(String email, String password) {
+        AccountRecord account = accounts.findByEmail(normalizeEmail(email)).orElse(null);
+        return account != null
+                && "ADMIN".equals(account.role())
+                && account.passwordHash() != null
+                && passwordEncoder.matches(password, account.passwordHash());
     }
 
     @Transactional
-    public AuthenticationResult login(String email, String password) {
-        AccountRecord account = accounts.findByEmail(normalizeEmail(email))
-                .orElseThrow(() -> new BadCredentialsException("Invalid email or password."));
-        if (!passwordEncoder.matches(password, account.passwordHash())) {
-            throw new BadCredentialsException("Invalid email or password.");
+    public AuthenticationResult createOrGetOtpAccount(String email) {
+        String normalizedEmail = normalizeEmail(email);
+        AccountRecord existing = accounts.findByEmail(normalizedEmail).orElse(null);
+        if (existing != null) {
+            if ("ADMIN".equals(existing.role())) {
+                throw new BadCredentialsException("Admin accounts require the Admin authentication flow.");
+            }
+            return issueResult(existing.id(), existing.email(), existing.fullName(),
+                    false, existing.profileCompleted());
         }
-        return issueResult(account.id(), account.email(), account.fullName());
+
+        UUID userId = UUID.randomUUID();
+        String displayName = displayNameFromEmail(normalizedEmail);
+        Instant now = clock.instant();
+        try {
+            accounts.insertOtpAccount(userId, normalizedEmail, displayName, now);
+        } catch (DuplicateKeyException race) {
+            AccountRecord concurrent = accounts.findByEmail(normalizedEmail).orElseThrow(() -> race);
+            if ("ADMIN".equals(concurrent.role())) {
+                throw new BadCredentialsException("Admin accounts require the Admin authentication flow.");
+            }
+            return issueResult(concurrent.id(), concurrent.email(), concurrent.fullName(),
+                    false, concurrent.profileCompleted());
+        }
+        return issueResult(userId, normalizedEmail, displayName, true, false);
     }
 
     @Transactional(readOnly = true)
@@ -72,25 +103,22 @@ public class AccountAuthenticationService {
             AccountPrincipal principal,
             String fullName,
             String phoneNumber,
-            java.time.LocalDate dateOfBirth,
+            LocalDate dateOfBirth,
             String nationality,
             String homeAirport,
             String preferredCurrency) {
-
-        String normalizedName = fullName.trim();
-        String normalizedPhone = normalizeOptional(phoneNumber);
-        String normalizedNationality = normalizeCode(nationality);
-        String normalizedHomeAirport = normalizeCode(homeAirport);
-        String normalizedCurrency = normalizeCode(preferredCurrency);
-
+        String normalizedName = normalizeOptional(fullName);
+        if (normalizedName != null && normalizedName.length() < 2) {
+            throw new IllegalArgumentException("Full name must contain at least two characters.");
+        }
         if (!accounts.updateProfile(
                 principal.userId(),
                 normalizedName,
-                normalizedPhone,
+                normalizeOptional(phoneNumber),
                 dateOfBirth,
-                normalizedNationality,
-                normalizedHomeAirport,
-                normalizedCurrency,
+                normalizeCode(nationality),
+                normalizeCode(homeAirport),
+                normalizeCode(preferredCurrency),
                 clock.instant())) {
             throw new BadCredentialsException("Account is no longer active.");
         }
@@ -109,23 +137,26 @@ public class AccountAuthenticationService {
         return new AccountPrincipal(
                 account.id(), account.email(), account.fullName(), account.role(), account.createdAt(),
                 account.phoneNumber(), account.dateOfBirth(), account.nationality(),
-                account.homeAirport(), account.preferredCurrency());
+                account.homeAirport(), account.preferredCurrency(), account.profileCompleted());
     }
 
-    private AuthenticationResult issueResult(UUID userId, String email, String fullName) {
+    private AuthenticationResult issueResult(
+            UUID userId, String email, String fullName, boolean isNewUser, boolean profileCompleted) {
         AccessTokenService.IssuedToken token = tokens.issue(userId);
-        return new AuthenticationResult(userId, email, fullName, token.value(), token.expiresAt());
+        return new AuthenticationResult(userId, email, fullName, token.value(), token.expiresAt(),
+                isNewUser, profileCompleted);
     }
 
-    private String normalizeEmail(String email) {
-        return email.trim().toLowerCase(Locale.ROOT);
+    private String normalizeEmail(String email) { return email.trim().toLowerCase(Locale.ROOT); }
+
+    private String displayNameFromEmail(String email) {
+        String localPart = email.substring(0, email.indexOf('@')).replaceAll("[._+-]+", " ").trim();
+        if (localPart.isEmpty()) return "Traveler";
+        return localPart.substring(0, 1).toUpperCase(Locale.ROOT) + localPart.substring(1);
     }
 
     private String normalizeOptional(String value) {
-        if (value == null || value.isBlank()) {
-            return null;
-        }
-        return value.trim();
+        return value == null || value.isBlank() ? null : value.trim();
     }
 
     private String normalizeCode(String value) {
@@ -134,12 +165,10 @@ public class AccountAuthenticationService {
     }
 
     public record AuthenticationResult(
-            UUID userId, String email, String fullName, String accessToken, java.time.Instant expiresAt) {
-    }
+            UUID userId, String email, String fullName, String accessToken, Instant expiresAt,
+            boolean isNewUser, boolean profileCompleted) { }
 
     public static class EmailAlreadyRegisteredException extends RuntimeException {
-        public EmailAlreadyRegisteredException() {
-            super("An account with this email address already exists.");
-        }
+        public EmailAlreadyRegisteredException() { super("An account with this email address already exists."); }
     }
 }

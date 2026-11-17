@@ -1,14 +1,14 @@
 package com.flyscanner.account.api;
 
-import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Past;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 
 import java.time.LocalDate;
 
+/** All traveler fields are optional; email and role are server-managed. */
 public record UpdateProfileRequest(
-        @NotBlank @Size(min = 2, max = 200) String fullName,
+        @Size(max = 200) String fullName,
         @Pattern(regexp = "^$|^\\+?[0-9 ()-]{7,20}$",
                 message = "must be a valid phone number")
         String phoneNumber,

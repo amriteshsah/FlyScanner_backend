@@ -6,7 +6,6 @@ import org.springframework.stereotype.Repository;
 
 import java.sql.Timestamp;
 import java.time.Instant;
-import java.time.LocalDate;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -33,7 +32,7 @@ public class JdbcAccessTokenSessionRepository {
         return jdbcTemplate.query("""
                 SELECT u.id, u.email, u.full_name, u.role, u.created_at,
                        u.phone_number, u.date_of_birth, u.nationality,
-                       u.home_airport, u.preferred_currency
+                       u.home_airport, u.preferred_currency, u.profile_completed
                 FROM account.access_token_sessions s
                 JOIN account.users u ON u.id = s.user_id
                 WHERE s.token_hash = ?
@@ -53,7 +52,8 @@ public class JdbcAccessTokenSessionRepository {
                             dateOfBirth == null ? null : dateOfBirth.toLocalDate(),
                             rs.getString("nationality"),
                             rs.getString("home_airport"),
-                            rs.getString("preferred_currency")
+                            rs.getString("preferred_currency"),
+                            rs.getBoolean("profile_completed")
                     );
                 },
                 tokenHash, Timestamp.from(now)

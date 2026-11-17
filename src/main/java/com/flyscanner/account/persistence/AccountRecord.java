@@ -15,6 +15,7 @@ public record AccountRecord(
         LocalDate dateOfBirth,
         String nationality,
         String homeAirport,
-        String preferredCurrency
+        String preferredCurrency,
+        boolean profileCompleted
 ) {
 }

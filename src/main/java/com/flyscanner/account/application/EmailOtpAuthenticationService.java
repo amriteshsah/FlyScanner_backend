@@ -1,7 +1,6 @@
 package com.flyscanner.account.application;
 
 import com.flyscanner.account.api.EmailOtpRequestResponse;
-import com.flyscanner.account.domain.AccountPrincipal;
 import com.flyscanner.account.otp.JdbcLoginOtpRepository;
 import com.flyscanner.account.otp.LoginOtpChallenge;
 import com.flyscanner.account.otp.LoginOtpEmailSender;
@@ -30,12 +29,12 @@ public class EmailOtpAuthenticationService {
     private static final Duration RESEND_COOLDOWN = Duration.ofMinutes(3);
     private static final int MAX_FAILED_ATTEMPTS = 5;
     private static final String GENERIC_MESSAGE =
-            "If an account exists for this email, a sign-in code has been sent.";
+            "If this email address is eligible, a sign-in code has been sent.";
 
     private final JdbcAccountRepository accounts;
     private final JdbcLoginOtpRepository challenges;
     private final LoginOtpEmailSender emailSender;
-    private final AccessTokenService tokens;
+    private final AccountAuthenticationService authenticationService;
     private final Clock clock;
     private final byte[] hmacSecret;
     private final SecureRandom secureRandom = new SecureRandom();
@@ -44,7 +43,7 @@ public class EmailOtpAuthenticationService {
             JdbcAccountRepository accounts,
             JdbcLoginOtpRepository challenges,
             LoginOtpEmailSender emailSender,
-            AccessTokenService tokens,
+            AccountAuthenticationService authenticationService,
             Clock clock,
             @Value("${flyscanner.auth.otp-hmac-secret}") String hmacSecret) {
         if (hmacSecret == null || hmacSecret.getBytes(StandardCharsets.UTF_8).length < 32) {
@@ -53,7 +52,7 @@ public class EmailOtpAuthenticationService {
         this.accounts = accounts;
         this.challenges = challenges;
         this.emailSender = emailSender;
-        this.tokens = tokens;
+        this.authenticationService = authenticationService;
         this.clock = clock;
         this.hmacSecret = hmacSecret.getBytes(StandardCharsets.UTF_8);
     }
@@ -70,41 +69,38 @@ public class EmailOtpAuthenticationService {
 
     private EmailOtpRequestResponse issueOrResend(String email) {
         Instant now = clock.instant();
-        AccountRecord account = accounts.findByEmail(normalizeEmail(email)).orElse(null);
-        if (account == null) {
-            // Keep response shape and message identical for unknown email addresses.
-            return new EmailOtpRequestResponse(GENERIC_MESSAGE,
-                    now.plus(OTP_TTL), now.plus(RESEND_COOLDOWN));
-        }
+        String normalizedEmail = normalizeEmail(email);
+        challenges.lockEmail(normalizedEmail);
 
-        // Serialize resend/request operations for this account, including the first insert.
-        challenges.lockAccount(account.id());
-        LoginOtpChallenge previous = challenges.findByUserIdForUpdate(account.id()).orElse(null);
+        LoginOtpChallenge previous = challenges.findByEmailForUpdate(normalizedEmail).orElse(null);
         if (previous != null) {
             Instant resendAvailableAt = previous.sentAt().plus(RESEND_COOLDOWN);
             if (now.isBefore(resendAvailableAt)) {
-                return new EmailOtpRequestResponse(
-                        GENERIC_MESSAGE, previous.expiresAt(), resendAvailableAt);
+                return new EmailOtpRequestResponse(GENERIC_MESSAGE, previous.expiresAt(), resendAvailableAt);
             }
+        }
+
+        AccountRecord account = accounts.findByEmail(normalizedEmail).orElse(null);
+        // Admin accounts must use the future password + OTP flow, never standard-user OTP-only login.
+        if (account != null && "ADMIN".equals(account.role())) {
+            return new EmailOtpRequestResponse(GENERIC_MESSAGE, now.plus(OTP_TTL), now.plus(RESEND_COOLDOWN));
         }
 
         String code = generateCode();
         Instant expiresAt = now.plus(OTP_TTL);
-        String digest = hash(account.id().toString() + ":" + code);
-        challenges.save(account.id(), digest, now, expiresAt);
+        String digest = hash(normalizedEmail + ":" + code);
+        challenges.save(normalizedEmail, digest, now, expiresAt);
 
-        // Do not include the OTP in the API response, database, or application logs.
-        emailSender.sendLoginOtp(account.email(), account.fullName(), code, expiresAt);
+        String displayName = account == null ? "traveller" : account.fullName();
+        emailSender.sendLoginOtp(normalizedEmail, displayName, code, expiresAt);
         return new EmailOtpRequestResponse(GENERIC_MESSAGE, expiresAt, now.plus(RESEND_COOLDOWN));
     }
 
     @Transactional(noRollbackFor = BadCredentialsException.class)
     public AccountAuthenticationService.AuthenticationResult verifyCode(String email, String code) {
-        AccountRecord account = accounts.findByEmail(normalizeEmail(email))
-                .orElseThrow(EmailOtpAuthenticationService::invalidCode);
-
-        challenges.lockAccount(account.id());
-        LoginOtpChallenge challenge = challenges.findByUserIdForUpdate(account.id())
+        String normalizedEmail = normalizeEmail(email);
+        challenges.lockEmail(normalizedEmail);
+        LoginOtpChallenge challenge = challenges.findByEmailForUpdate(normalizedEmail)
                 .orElseThrow(EmailOtpAuthenticationService::invalidCode);
 
         Instant now = clock.instant();
@@ -114,20 +110,17 @@ public class EmailOtpAuthenticationService {
             throw invalidCode();
         }
 
-        String expected = hash(account.id() + ":" + code);
+        String expected = hash(normalizedEmail + ":" + code);
         boolean matches = MessageDigest.isEqual(
                 expected.getBytes(StandardCharsets.US_ASCII),
                 challenge.otpHash().trim().getBytes(StandardCharsets.US_ASCII));
         if (!matches) {
-            challenges.recordFailedAttempt(account.id(), now);
+            challenges.recordFailedAttempt(normalizedEmail, now);
             throw invalidCode();
         }
 
-        // Consume inside the same locked transaction as access-token creation.
-        challenges.consume(account.id(), now);
-        AccessTokenService.IssuedToken token = tokens.issue(account.id());
-        return new AccountAuthenticationService.AuthenticationResult(
-                account.id(), account.email(), account.fullName(), token.value(), token.expiresAt());
+        challenges.consume(normalizedEmail, now);
+        return authenticationService.createOrGetOtpAccount(normalizedEmail);
     }
 
     private String generateCode() {
@@ -144,9 +137,7 @@ public class EmailOtpAuthenticationService {
         }
     }
 
-    private String normalizeEmail(String email) {
-        return email.trim().toLowerCase(Locale.ROOT);
-    }
+    private String normalizeEmail(String email) { return email.trim().toLowerCase(Locale.ROOT); }
 
     private static BadCredentialsException invalidCode() {
         return new BadCredentialsException("The sign-in code is invalid or expired. Request a new code.");

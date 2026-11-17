@@ -20,7 +20,7 @@ import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
-@Tag(name = "Authentication", description = "Account registration, login, profile and logout")
+@Tag(name = "Authentication", description = "Email OTP authentication, traveler profile and logout")
 @RequestMapping("/api/v1/auth")
 public class AccountAuthenticationController {
 
@@ -34,35 +34,24 @@ public class AccountAuthenticationController {
         this.emailOtpAuthenticationService = emailOtpAuthenticationService;
     }
 
-    @Operation(summary = "Register a new FlyScanner account")
-    @PostMapping("/register")
-    @ResponseStatus(HttpStatus.CREATED)
-    public AuthenticationResponse register(@Valid @RequestBody RegisterRequest request) {
-        var result = authenticationService.register(request.email(), request.fullName(), request.password());
-        return toResponse(result);
-    }
+    // No public /register or /login endpoint exists for standard users.
+    // Password verification remains in the service for the future Admin first factor.
 
-    @Operation(summary = "Authenticate with email and password")
-    @PostMapping("/login")
-    public AuthenticationResponse login(@Valid @RequestBody LoginRequest request) {
-        return toResponse(authenticationService.login(request.email(), request.password()));
-    }
-
-    @Operation(summary = "Request a one-time email sign-in code")
+    @Operation(summary = "Request a sign-in OTP for an existing or new email address")
     @PostMapping("/otp/request")
     @ResponseStatus(HttpStatus.ACCEPTED)
     public EmailOtpRequestResponse requestEmailOtp(@Valid @RequestBody EmailOtpRequest request) {
         return emailOtpAuthenticationService.requestCode(request.email());
     }
 
-    @Operation(summary = "Resend the email sign-in code after the resend cooldown")
+    @Operation(summary = "Resend the sign-in OTP after the resend cooldown")
     @PostMapping("/otp/resend")
     @ResponseStatus(HttpStatus.ACCEPTED)
     public EmailOtpRequestResponse resendEmailOtp(@Valid @RequestBody EmailOtpRequest request) {
         return emailOtpAuthenticationService.resendCode(request.email());
     }
 
-    @Operation(summary = "Verify an email sign-in code and create an authenticated session")
+    @Operation(summary = "Verify an OTP and create or retrieve the standard-user account")
     @PostMapping("/otp/verify")
     public AuthenticationResponse verifyEmailOtp(@Valid @RequestBody VerifyEmailOtpRequest request) {
         return toResponse(emailOtpAuthenticationService.verifyCode(request.email(), request.code()));
@@ -75,7 +64,7 @@ public class AccountAuthenticationController {
         return authenticationService.getProfile(principal);
     }
 
-    @Operation(summary = "Update the currently authenticated user's profile")
+    @Operation(summary = "Update optional traveler profile details or skip onboarding")
     @SecurityRequirement(name = "bearerAuth")
     @PatchMapping("/me")
     public AccountPrincipal updateProfile(
@@ -102,6 +91,6 @@ public class AccountAuthenticationController {
 
     private AuthenticationResponse toResponse(AccountAuthenticationService.AuthenticationResult result) {
         return new AuthenticationResponse(result.userId(), result.email(), result.fullName(),
-                result.accessToken(), result.expiresAt());
+                result.accessToken(), result.expiresAt(), result.isNewUser(), result.profileCompleted());
     }
 }

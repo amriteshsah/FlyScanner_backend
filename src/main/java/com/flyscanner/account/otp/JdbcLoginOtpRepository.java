@@ -6,7 +6,6 @@ import org.springframework.stereotype.Repository;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.Optional;
-import java.util.UUID;
 
 @Repository
 public class JdbcLoginOtpRepository {
@@ -17,61 +16,66 @@ public class JdbcLoginOtpRepository {
         this.jdbcTemplate = jdbcTemplate;
     }
 
-    /** Locks the account row to serialize initial OTP requests as well as resends. */
-    public void lockAccount(UUID userId) {
+    /** Locks a durable per-email row before inspecting or creating a challenge. */
+    public void lockEmail(String email) {
+        jdbcTemplate.update("""
+                MERGE INTO account.email_login_otp_locks target
+                USING (SELECT CAST(? AS VARCHAR(320)) AS email) source
+                ON target.email = source.email
+                WHEN NOT MATCHED THEN INSERT (email) VALUES (source.email)
+                """, email);
         jdbcTemplate.queryForObject(
-                "SELECT id FROM account.users WHERE id = ? FOR UPDATE",
-                UUID.class,
-                userId
+                "SELECT email FROM account.email_login_otp_locks WHERE email = ? FOR UPDATE",
+                String.class,
+                email
         );
     }
 
-    public Optional<LoginOtpChallenge> findByUserIdForUpdate(UUID userId) {
+    public Optional<LoginOtpChallenge> findByEmailForUpdate(String email) {
         return jdbcTemplate.query("""
-                SELECT user_id, otp_hash, sent_at, expires_at, failed_attempts, consumed_at
+                SELECT email, otp_hash, sent_at, expires_at, failed_attempts, consumed_at
                 FROM account.email_login_otps
-                WHERE user_id = ?
+                WHERE email = ?
                 FOR UPDATE
                 """, (rs, rowNum) -> new LoginOtpChallenge(
-                rs.getObject("user_id", UUID.class),
+                rs.getString("email"),
                 rs.getString("otp_hash"),
                 rs.getTimestamp("sent_at").toInstant(),
                 rs.getTimestamp("expires_at").toInstant(),
                 rs.getInt("failed_attempts"),
                 rs.getTimestamp("consumed_at") == null ? null : rs.getTimestamp("consumed_at").toInstant()
-        ), userId).stream().findFirst();
+        ), email).stream().findFirst();
     }
 
-    public void save(UUID userId, String otpHash, Instant sentAt, Instant expiresAt) {
+    public void save(String email, String otpHash, Instant sentAt, Instant expiresAt) {
         int updated = jdbcTemplate.update("""
                 UPDATE account.email_login_otps
                 SET otp_hash = ?, sent_at = ?, expires_at = ?, failed_attempts = 0, consumed_at = NULL
-                WHERE user_id = ?
-                """, otpHash, Timestamp.from(sentAt), Timestamp.from(expiresAt), userId);
-
+                WHERE email = ?
+                """, otpHash, Timestamp.from(sentAt), Timestamp.from(expiresAt), email);
         if (updated == 0) {
             jdbcTemplate.update("""
                     INSERT INTO account.email_login_otps (
-                        user_id, otp_hash, sent_at, expires_at, failed_attempts, consumed_at
+                        email, otp_hash, sent_at, expires_at, failed_attempts, consumed_at
                     ) VALUES (?, ?, ?, ?, 0, NULL)
-                    """, userId, otpHash, Timestamp.from(sentAt), Timestamp.from(expiresAt));
+                    """, email, otpHash, Timestamp.from(sentAt), Timestamp.from(expiresAt));
         }
     }
 
-    public void recordFailedAttempt(UUID userId, Instant attemptedAt) {
+    public void recordFailedAttempt(String email, Instant attemptedAt) {
         jdbcTemplate.update("""
                 UPDATE account.email_login_otps
                 SET failed_attempts = failed_attempts + 1,
                     consumed_at = CASE WHEN failed_attempts + 1 >= 5 THEN ? ELSE consumed_at END
-                WHERE user_id = ? AND consumed_at IS NULL AND failed_attempts < 5
-                """, Timestamp.from(attemptedAt), userId);
+                WHERE email = ? AND consumed_at IS NULL AND failed_attempts < 5
+                """, Timestamp.from(attemptedAt), email);
     }
 
-    public void consume(UUID userId, Instant consumedAt) {
+    public void consume(String email, Instant consumedAt) {
         jdbcTemplate.update("""
                 UPDATE account.email_login_otps
                 SET consumed_at = ?
-                WHERE user_id = ? AND consumed_at IS NULL
-                """, Timestamp.from(consumedAt), userId);
+                WHERE email = ? AND consumed_at IS NULL
+                """, Timestamp.from(consumedAt), email);
     }
 }

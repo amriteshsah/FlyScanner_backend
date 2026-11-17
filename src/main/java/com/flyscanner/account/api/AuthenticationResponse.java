@@ -8,6 +8,8 @@ public record AuthenticationResponse(
         String email,
         String fullName,
         String accessToken,
-        Instant expiresAt
+        Instant expiresAt,
+        boolean isNewUser,
+        boolean profileCompleted
 ) {
 }
