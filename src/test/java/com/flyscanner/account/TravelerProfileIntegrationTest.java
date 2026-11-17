@@ -1,14 +1,14 @@
 package com.flyscanner.account;
 
+import com.flyscanner.account.application.AccountAuthenticationService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
-import org.springframework.test.web.servlet.MvcResult;
 
 import java.sql.Date;
 import java.util.UUID;
@@ -17,7 +17,6 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -26,35 +25,20 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @ActiveProfiles("local")
 class TravelerProfileIntegrationTest {
 
-    @Autowired
-    private MockMvc mockMvc;
-
-    @Autowired
-    private JdbcTemplate jdbcTemplate;
+    @Autowired private MockMvc mockMvc;
+    @Autowired private JdbcTemplate jdbcTemplate;
+    @Autowired private AccountAuthenticationService authenticationService;
 
     @Test
-    void travelerProfileIsSavedToDatabaseAndReturnedByTheAuthenticatedProfileEndpoint() throws Exception {
+    void travelerProfileFieldsAreOptionalAndSavedForTheAuthenticatedAccount() throws Exception {
         String email = "traveler-profile-" + UUID.randomUUID() + "@example.test";
-        String password = "Traveler-Profile-Test-2026!";
-
-        MvcResult registration = mockMvc.perform(post("/api/v1/auth/register")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("""
-                                {
-                                  "email": "%s",
-                                  "fullName": "Profile Test User",
-                                  "password": "%s"
-                                }
-                                """.formatted(email, password)))
-                .andExpect(status().isCreated())
-                .andReturn();
-
-        String registrationBody = registration.getResponse().getContentAsString();
-        String accessToken = extractJsonString(registrationBody, "accessToken");
-        String userId = extractJsonString(registrationBody, "userId");
+        var registration = authenticationService.register(
+                email, "Profile Test User", "Traveler-Profile-Test-2026!");
+        String token = registration.accessToken();
+        UUID userId = registration.userId();
 
         mockMvc.perform(patch("/api/v1/auth/me")
-                        .header("Authorization", "Bearer " + accessToken)
+                        .header("Authorization", "Bearer " + token)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {
@@ -76,80 +60,63 @@ class TravelerProfileIntegrationTest {
                 .andExpect(jsonPath("$.dateOfBirth").value("1990-06-15"))
                 .andExpect(jsonPath("$.nationality").value("IN"))
                 .andExpect(jsonPath("$.homeAirport").value("BLR"))
-                .andExpect(jsonPath("$.preferredCurrency").value("INR"));
+                .andExpect(jsonPath("$.preferredCurrency").value("INR"))
+                .andExpect(jsonPath("$.profileCompleted").value(true));
 
-        var persisted = jdbcTemplate.queryForMap("""
+        var saved = jdbcTemplate.queryForMap("""
                 SELECT full_name, email, role, phone_number, date_of_birth,
                        nationality, home_airport, preferred_currency
-                FROM account.users
-                WHERE id = ?
-                """, UUID.fromString(userId));
+                FROM account.users WHERE id = ?
+                """, userId);
+        assertEquals("Updated Profile User", saved.get("FULL_NAME"));
+        assertEquals(email, saved.get("EMAIL"));
+        assertEquals("USER", saved.get("ROLE"));
+        assertEquals("+919876543210", saved.get("PHONE_NUMBER"));
+        assertEquals(Date.valueOf("1990-06-15"), saved.get("DATE_OF_BIRTH"));
+        assertEquals("IN", saved.get("NATIONALITY").toString().trim());
+        assertEquals("BLR", saved.get("HOME_AIRPORT").toString().trim());
+        assertEquals("INR", saved.get("PREFERRED_CURRENCY").toString().trim());
 
-        assertEquals("Updated Profile User", persisted.get("FULL_NAME").toString());
-        assertEquals(email, persisted.get("EMAIL").toString());
-        assertEquals("USER", persisted.get("ROLE").toString());
-        assertEquals("+919876543210", persisted.get("PHONE_NUMBER").toString());
-        assertEquals(Date.valueOf("1990-06-15"), persisted.get("DATE_OF_BIRTH"));
-        assertEquals("IN", persisted.get("NATIONALITY").toString().trim());
-        assertEquals("BLR", persisted.get("HOME_AIRPORT").toString().trim());
-        assertEquals("INR", persisted.get("PREFERRED_CURRENCY").toString().trim());
-
-        mockMvc.perform(get("/api/v1/auth/me")
-                        .header("Authorization", "Bearer " + accessToken))
+        mockMvc.perform(get("/api/v1/auth/me").header("Authorization", "Bearer " + token))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.fullName").value("Updated Profile User"))
-                .andExpect(jsonPath("$.phoneNumber").value("+919876543210"))
-                .andExpect(jsonPath("$.dateOfBirth").value("1990-06-15"))
-                .andExpect(jsonPath("$.nationality").value("IN"))
-                .andExpect(jsonPath("$.homeAirport").value("BLR"))
-                .andExpect(jsonPath("$.preferredCurrency").value("INR"));
+                .andExpect(jsonPath("$.profileCompleted").value(true));
+        assertNotNull(saved.get("DATE_OF_BIRTH"));
+    }
 
-        assertNotNull(persisted.get("DATE_OF_BIRTH"));
+    @Test
+    void profilePatchCanContainOnlyOneOptionalField() throws Exception {
+        String email = "partial-profile-" + UUID.randomUUID() + "@example.test";
+        var registration = authenticationService.register(
+                email, "Original Traveler", "Traveler-Profile-Test-2026!");
+
+        mockMvc.perform(patch("/api/v1/auth/me")
+                        .header("Authorization", "Bearer " + registration.accessToken())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"phoneNumber":"+919876543210"}
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.fullName").value("Original Traveler"))
+                .andExpect(jsonPath("$.phoneNumber").value("+919876543210"));
     }
 
     @Test
     void invalidTravelerProfileCodesAreRejectedWithBadRequest() throws Exception {
         String email = "invalid-profile-" + UUID.randomUUID() + "@example.test";
-        MvcResult registration = mockMvc.perform(post("/api/v1/auth/register")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("""
-                                {
-                                  "email": "%s",
-                                  "fullName": "Profile Validation User",
-                                  "password": "Traveler-Profile-Test-2026!"
-                                }
-                                """.formatted(email)))
-                .andExpect(status().isCreated())
-                .andReturn();
-
-        String accessToken = extractJsonString(
-                registration.getResponse().getContentAsString(), "accessToken");
+        var registration = authenticationService.register(
+                email, "Profile Validation User", "Traveler-Profile-Test-2026!");
 
         mockMvc.perform(patch("/api/v1/auth/me")
-                        .header("Authorization", "Bearer " + accessToken)
+                        .header("Authorization", "Bearer " + registration.accessToken())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {
-                                  "fullName": "Profile Validation User",
-                                  "nationality": "INDIA",
-                                  "homeAirport": "BENGALURU",
-                                  "preferredCurrency": "RUPEES"
+                                  "nationality":"INDIA",
+                                  "homeAirport":"BENGALURU",
+                                  "preferredCurrency":"RUPEES"
                                 }
                                 """))
                 .andExpect(status().isBadRequest());
-    }
-
-    private String extractJsonString(String json, String field) {
-        String marker = "\"" + field + "\":\"";
-        int valueStart = json.indexOf(marker);
-        if (valueStart < 0) {
-            throw new AssertionError("JSON response did not contain string field: " + field);
-        }
-        valueStart += marker.length();
-        int valueEnd = json.indexOf('"', valueStart);
-        if (valueEnd < 0) {
-            throw new AssertionError("JSON string field was not terminated: " + field);
-        }
-        return json.substring(valueStart, valueEnd);
     }
 }

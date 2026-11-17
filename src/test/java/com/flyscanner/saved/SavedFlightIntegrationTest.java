@@ -6,6 +6,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
+import com.flyscanner.account.application.AccountAuthenticationService;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
@@ -32,18 +33,16 @@ class SavedFlightIntegrationTest {
     @Autowired
     private JdbcTemplate jdbcTemplate;
 
+    @Autowired
+    private AccountAuthenticationService authenticationService;
+
     @Test
     void savesLoadsAndDeletesAFlightOfferForTheAuthenticatedUser() throws Exception {
         String email = "saved-flight-" + UUID.randomUUID() + "@example.test";
-        MvcResult registration = mockMvc.perform(post("/api/v1/auth/register")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("""
-                                {"email":"%s","fullName":"Saved Flight Test","password":"Safe-Development-Password-2026!"}
-                                """.formatted(email)))
-                .andExpect(status().isCreated())
-                .andReturn();
-        String token = extractJsonString(registration.getResponse().getContentAsString(), "accessToken");
-        String userId = extractJsonString(registration.getResponse().getContentAsString(), "userId");
+        AccountAuthenticationService.AuthenticationResult registration =
+                authenticationService.register(email, "Saved Flight Test", "Safe-Development-Password-2026!");
+        String token = registration.accessToken();
+        String userId = registration.userId().toString();
 
         String departure = LocalDate.now().plusDays(35).toString();
         MvcResult search = mockMvc.perform(post("/api/v1/searches")

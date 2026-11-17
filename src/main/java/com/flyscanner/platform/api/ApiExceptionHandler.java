@@ -13,6 +13,7 @@ import com.flyscanner.account.otp.SmtpLoginOtpEmailSender;
 import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.web.servlet.resource.NoResourceFoundException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
@@ -80,6 +81,13 @@ public class ApiExceptionHandler {
             SmtpLoginOtpEmailSender.OtpEmailDeliveryException exception, HttpServletRequest request) {
         return problem(HttpStatus.SERVICE_UNAVAILABLE, "Email delivery unavailable",
                 "The sign-in email could not be sent. Please try again later.", request);
+    }
+
+    @ExceptionHandler(NoResourceFoundException.class)
+    public ResponseEntity<ProblemDetail> handleRouteNotFound(
+            NoResourceFoundException exception, HttpServletRequest request) {
+        return problem(HttpStatus.NOT_FOUND, "Resource not found",
+                "The requested API route does not exist.", request);
     }
 
     @ExceptionHandler(Exception.class)
