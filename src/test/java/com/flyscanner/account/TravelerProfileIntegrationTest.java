@@ -85,6 +85,29 @@ class TravelerProfileIntegrationTest {
     }
 
     @Test
+    void onboardingPayloadAcceptsAnInternationalPhoneWithSpacesAndAnIsoDate() throws Exception {
+        String email = "onboarding-profile-" + UUID.randomUUID() + "@example.test";
+        var registration = authenticationService.register(
+                email, "Initial Traveler", "Traveler-Profile-Test-2026!");
+
+        mockMvc.perform(patch("/api/v1/auth/me")
+                        .header("Authorization", "Bearer " + registration.accessToken())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "fullName": "Amritesh Sah",
+                                  "phoneNumber": "+91 98765 43210",
+                                  "dateOfBirth": "1998-08-17"
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.fullName").value("Amritesh Sah"))
+                .andExpect(jsonPath("$.phoneNumber").value("+91 98765 43210"))
+                .andExpect(jsonPath("$.dateOfBirth").value("1998-08-17"))
+                .andExpect(jsonPath("$.profileCompleted").value(true));
+    }
+
+    @Test
     void profilePatchCanContainOnlyOneOptionalField() throws Exception {
         String email = "partial-profile-" + UUID.randomUUID() + "@example.test";
         var registration = authenticationService.register(
