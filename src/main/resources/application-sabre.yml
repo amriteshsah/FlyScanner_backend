@@ -2,8 +2,9 @@
 flyscanner:
   search:
     mock-enabled: false
+    provider-timeout: ${SABRE_PROVIDER_TIMEOUT:8s}
   sabre:
-    enabled: ${SABRE_ENABLED:true}
+    enabled: ${SABRE_ENABLED:false}
     base-url: ${SABRE_BASE_URL:https://api.cert.platform.sabre.com}
     token-url: ${SABRE_TOKEN_URL:https://api.cert.platform.sabre.com/v2/auth/token}
     username: ${SABRE_USERNAME:}
