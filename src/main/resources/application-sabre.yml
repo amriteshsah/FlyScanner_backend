@@ -1,0 +1,13 @@
+# Activate with SPRING_PROFILES_ACTIVE=local,sabre.
+flyscanner:
+  search:
+    mock-enabled: false
+  sabre:
+    enabled: ${SABRE_ENABLED:true}
+    base-url: ${SABRE_BASE_URL:https://api.cert.platform.sabre.com}
+    token-url: ${SABRE_TOKEN_URL:https://api.cert.platform.sabre.com/v2/auth/token}
+    username: ${SABRE_USERNAME:}
+    group: ${SABRE_GROUP:}
+    domain: ${SABRE_DOMAIN:}
+    password: ${SABRE_PASSWORD:}
+    max-offers: ${SABRE_MAX_OFFERS:30}
