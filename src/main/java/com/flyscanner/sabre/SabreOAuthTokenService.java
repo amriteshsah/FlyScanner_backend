@@ -1,6 +1,7 @@
 package com.flyscanner.sabre;
 
 import org.springframework.http.MediaType;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestClient;
 
@@ -10,13 +11,14 @@ import java.util.Base64;
 import java.util.Map;
 
 @Service
+@ConditionalOnProperty(prefix = "flyscanner.sabre", name = "enabled", havingValue = "true")
 public class SabreOAuthTokenService {
     private final RestClient restClient;
     private final SabreProperties properties;
     private volatile CachedToken cachedToken;
 
-    public SabreOAuthTokenService(RestClient.Builder builder, SabreProperties properties) {
-        this.restClient = builder.build();
+    public SabreOAuthTokenService(SabreProperties properties) {
+        this.restClient = RestClient.create();
         this.properties = properties;
     }
 
