@@ -19,10 +19,9 @@ public class SabreFlightShopLiteAdapter implements FlightSupplierAdapter {
     private final SabreProperties properties;
     private final SabreFlightShopLiteMapper mapper = new SabreFlightShopLiteMapper();
 
-    public SabreFlightShopLiteAdapter(RestClient.Builder builder,
-                                     SabreOAuthTokenService tokenService,
+    public SabreFlightShopLiteAdapter(SabreOAuthTokenService tokenService,
                                      SabreProperties properties) {
-        this.restClient = builder.baseUrl(properties.getBaseUrl()).build();
+        this.restClient = RestClient.builder().baseUrl(properties.getBaseUrl()).build();
         this.tokenService = tokenService;
         this.properties = properties;
     }
