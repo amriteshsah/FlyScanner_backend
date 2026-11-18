@@ -109,6 +109,58 @@ class FlightSearchServiceTest {
         assertEquals(29_550L, response.offers().getFirst().price().amount().longValueExact());
     }
 
+
+    @Test
+    void acceptsAnInfantAndIncludesItInTheSupplierPassengerCount() {
+        LocalDate departure = LocalDate.now(clock).plusDays(20);
+        FlightSearchRequest request = new FlightSearchRequest(
+                TripType.ONE_WAY,
+                List.of(new FlightLegRequest("BLR", "DXB", departure)),
+                new PassengerRequest(1, List.of(), 1),
+                CabinClass.ECONOMY,
+                "INR",
+                "IN",
+                "en-IN"
+        );
+
+        var response = service.search(request);
+
+        assertEquals(19_700L, response.offers().getFirst().price().amount().longValueExact());
+        verify(resultRepository).save(request, response);
+    }
+
+    @Test
+    void rejectsMoreInfantsThanAccompanyingAdults() {
+        LocalDate departure = LocalDate.now(clock).plusDays(20);
+        FlightSearchRequest request = new FlightSearchRequest(
+                TripType.ONE_WAY,
+                List.of(new FlightLegRequest("BLR", "DXB", departure)),
+                new PassengerRequest(1, List.of(), 2),
+                CabinClass.ECONOMY,
+                "INR",
+                "IN",
+                "en-IN"
+        );
+
+        assertThrows(IllegalArgumentException.class, () -> service.search(request));
+    }
+
+    @Test
+    void rejectsACombinedPassengerCountAboveNine() {
+        LocalDate departure = LocalDate.now(clock).plusDays(20);
+        FlightSearchRequest request = new FlightSearchRequest(
+                TripType.ONE_WAY,
+                List.of(new FlightLegRequest("BLR", "DXB", departure)),
+                new PassengerRequest(8, List.of(6), 1),
+                CabinClass.ECONOMY,
+                "INR",
+                "IN",
+                "en-IN"
+        );
+
+        assertThrows(IllegalArgumentException.class, () -> service.search(request));
+    }
+
     @Test
     void rejectsRoundTripWithOnlyOneLeg() {
         var request = request(TripType.ROUND_TRIP,

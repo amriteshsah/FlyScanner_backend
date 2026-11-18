@@ -17,7 +17,7 @@ The first implementation uses a deterministic mock supplier. It returns syntheti
       "passengers": {
         "adults": 2,
         "childrenAges": [6],
-        "infants": 0
+        "infants": 1
       },
       "cabinClass": "ECONOMY",
       "currency": "INR",
@@ -31,8 +31,8 @@ The first implementation uses a deterministic mock supplier. It returns syntheti
 - One-way requires exactly one leg; round-trip requires two reversed route legs.
 - Airport values are uppercase three-letter IATA codes.
 - Departure dates are today or later.
-- Adults must be 1 to 9; infants cannot exceed adults.
-- Total passengers cannot exceed 9.
+- Adults must be 1 to 9. Infants are counted separately and cannot exceed the number of accompanying adults (at most one infant per adult).
+- The combined total of adults, children and infants cannot exceed 9.
 - Currency is a three-letter uppercase code; market is a two-letter uppercase code.
 - The mock supplier currently returns INR fixtures only. It does not convert currencies.
 
