@@ -1,6 +1,7 @@
 package com.flyscanner.account.persistence;
 
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.UUID;
 
 public record AccountRecord(
@@ -9,6 +10,12 @@ public record AccountRecord(
         String fullName,
         String passwordHash,
         String role,
-        Instant createdAt
+        Instant createdAt,
+        String phoneNumber,
+        LocalDate dateOfBirth,
+        String nationality,
+        String homeAirport,
+        String preferredCurrency,
+        boolean profileCompleted
 ) {
 }

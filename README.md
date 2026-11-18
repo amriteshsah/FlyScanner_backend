@@ -8,6 +8,7 @@ The first release is a modular monolith: one deployable Spring Boot application 
 
 - Spring Boot 4.1.2 and Java 21
 - Spring MVC REST API, Actuator health probes and Swagger UI / OpenAPI documentation
+- Email OTP-only authentication for standard traveler accounts with opaque bearer sessions
 - H2 in-memory database for default local development
 - PostgreSQL profile retained for compatibility testing and deployment
 - Flyway migrations shared across database profiles
@@ -19,7 +20,7 @@ The first release is a modular monolith: one deployable Spring Boot application 
 - Canonical offer response, provider status and partial-failure model
 - Bounded supplier-search executor with configurable provider timeout
 
-No real flight supplier, production authentication provider, email vendor, affiliate partner or AWS resources are connected yet. Mock fares and schedules are synthetic and not bookable.
+No real flight supplier, affiliate partner or AWS resources are connected yet. Email login uses configurable SMTP delivery. Mock fares and schedules are synthetic and not bookable.
 
 ## Prerequisites
 
@@ -56,7 +57,7 @@ Start the backend with the default `local` profile, then open:
 - OpenAPI JSON: http://localhost:8080/v3/api-docs
 - OpenAPI YAML: http://localhost:8080/v3/api-docs.yaml
 
-Swagger UI includes the account, flight-search and price-alert endpoints. Use the **Authorize** control and enter the access token returned by registration or login to try protected profile and price-alert operations. The HTTP bearer scheme adds the `Bearer` prefix automatically.
+Swagger UI includes the account, flight-search and price-alert endpoints. Use the **Authorize** control and enter the access token returned after email OTP verification to try protected profile and price-alert operations. The HTTP bearer scheme adds the `Bearer` prefix automatically.
 
 The docs endpoints are enabled by default only in the `local` profile. In another profile they remain disabled unless `SWAGGER_ENABLED=true` is configured. Keep API documentation disabled in production unless there is an approved access-control policy for it.
 
@@ -104,7 +105,7 @@ Core search tables:
 | `search.flight_journeys` | Journey details for each offer |
 | `search.flight_segments` | Individual flight segments |
 
-Additional module tables are created for future functionality: `account.users`, `affiliate.click_tracking`, `alerts.price_alerts` and `notifications.notification_history`. Those are not populated by the current search flow because login, affiliate redirect, price-alert and notification workflows are not implemented yet.
+Additional module tables include `account.users`, `account.email_login_otps`, `account.email_login_otp_locks`, `account.saved_flights`, `affiliate.click_tracking`, `alerts.price_alerts` and `notifications.notification_history`. OTP challenges and saved-flight associations are populated by their respective authenticated account flows.
 
 Use these queries in H2 Console:
 
@@ -141,30 +142,78 @@ The local H2 database is in-memory. Data is cleared when the backend JVM stops. 
 
 The account and price-alert APIs are available in the current foundation branch.
 
-### Register an account
+### Standard-user email OTP sign-in and auto-registration
+
+Standard traveler accounts use email OTP only. The same flow signs in existing users and creates a new account for an unregistered email after successful verification. There is no public standard-user password login, password registration or password-reset route.
 
 ```bash
-curl -X POST http://localhost:8080/api/v1/auth/register \
+# Request a sign-in code. This does not create an account.
+curl -X POST http://localhost:8080/api/v1/auth/otp/request \
   -H "Content-Type: application/json" \
-  -d '{"email":"traveler@example.com","fullName":"Test Traveler","password":"Use-A-Unique-Password-2026!"}'
+  -d '{"email":"traveler@example.com"}'
+
+# Verify the six-digit code sent to that email.
+curl -X POST http://localhost:8080/api/v1/auth/otp/verify \
+  -H "Content-Type: application/json" \
+  -d '{"email":"traveler@example.com","code":"123456"}'
 ```
 
-Registration returns an opaque bearer access token. Passwords are stored as BCrypt hashes. Access tokens are generated from cryptographically secure random bytes; only SHA-256 token hashes are persisted in `account.access_token_sessions`. Tokens expire after 12 hours by default and can be revoked at logout.
+The verify response returns an opaque bearer access token and onboarding metadata:
+- `isNewUser` indicates whether this verification created the account.
+- `profileCompleted` indicates whether optional traveler profile onboarding is complete.
 
-### Login and current profile
+For a new email, the account row is inserted only after successful OTP verification. A display name derived from the email address is used initially; the user can add a full name and other details later. Existing standard accounts continue to sign in with OTP and are not marked as new.
 
-```bash
-curl -X POST http://localhost:8080/api/v1/auth/login \
-  -H "Content-Type: application/json" \
-  -d '{"email":"traveler@example.com","password":"Use-A-Unique-Password-2026!"}'
-```
+OTP request and resend endpoints accept an email address only:
+- `POST /api/v1/auth/otp/request` with `{"email":"traveler@example.com"}`
+- `POST /api/v1/auth/otp/resend` with `{"email":"traveler@example.com"}`
+- `POST /api/v1/auth/otp/verify` with `{"email":"traveler@example.com","code":"123456"}`
 
-Use the returned token on protected endpoints:
+The request and resend endpoints return `202 Accepted` with `expiresAt` and `resendAvailableAt`. A code expires **5 minutes** after issue. A replacement code can be sent after a **3-minute** cooldown. The previous code is replaced when a resend succeeds. Each challenge permits up to five incorrect verification attempts; the challenge is then invalidated. A successful code is consumed atomically and cannot be reused. OTP hashes use HMAC-SHA-256 with a server-only secret; raw codes are not returned by the API or stored in the database.
+
+For privacy, the request/resend response message is the same for eligible and ineligible addresses. An OTP may be sent to a new email address because successful verification is what establishes ownership and creates the account.
+
+### SMTP configuration
+
+Configure SMTP before enabling standard-user email OTP in a shared/deployed environment:
+
+| Environment variable | Purpose |
+|---|---|
+| `SMTP_HOST` | SMTP server hostname |
+| `SMTP_PORT` | SMTP server port (default 587) |
+| `SMTP_USERNAME` | SMTP account username |
+| `SMTP_PASSWORD` | SMTP account password or app password |
+| `SMTP_AUTH` | Enable SMTP authentication (default true) |
+| `SMTP_STARTTLS` | Enable STARTTLS (default true) |
+| `MAIL_FROM` | Verified sender address |
+| `FLYSCANNER_OTP_HMAC_SECRET` | Private random secret of at least 32 bytes used to HMAC OTP values |
+
+The local profile contains a development-only fallback HMAC secret for local testing. Set `FLYSCANNER_OTP_HMAC_SECRET` to a unique secret in every shared/deployed environment; do not reuse the local fallback and do not commit the production value. Keep SMTP and HMAC secrets in the deployment's secret manager/environment configuration.
+
+### Current profile and optional onboarding
+
+Use the returned bearer token on protected endpoints:
 
 ```bash
 curl http://localhost:8080/api/v1/auth/me \
   -H "Authorization: Bearer <access-token>"
 ```
+
+All traveler profile fields are optional. Omit any field you do not want to update. Sending an empty JSON object completes onboarding without adding profile details, which supports the UI's **Skip for now** action.
+
+```bash
+curl -X PATCH http://localhost:8080/api/v1/auth/me \
+  -H "Authorization: Bearer <access-token>" \
+  -H "Content-Type: application/json" \
+  -d '{"fullName":"Test Traveler","phoneNumber":"+919876543210"}'
+```
+
+The profile response includes `profileCompleted`. The standard UI uses it to show first-time onboarding; users can update the details again from their account profile page.
+
+### Admin authentication foundation
+
+Standard-user password login has been removed from the public API and UI. The backend retains a role-gated password verification method for a future Admin portal. That method only verifies the password first factor for an `ADMIN` account; it does not issue a session. A future Admin authentication endpoint must add its own email OTP second factor before granting access. Do not expose the Admin verifier directly from the standard-user login route.
+
 
 ### Create, list and deactivate price alerts
 
@@ -203,12 +252,14 @@ The token is revoked immediately. Use login to issue a new token.
 
 ### Security and current limitations
 
-- Public endpoints: registration, login, flight search and health/system-info endpoints.
+- Public endpoints: email OTP request/resend/verify, flight search and health/system-info endpoints.
 - Protected endpoints: current account profile, logout and all price-alert operations.
 - Password hashing uses BCrypt. Never log or persist submitted passwords.
+- Email OTP values are cryptographically random six-digit codes, valid for five minutes, stored only as HMAC-SHA-256 hashes, limited to five failed attempts and single-use on successful verification.
+- OTP request/resend is throttled per email address with a three-minute server-side cooldown. Add IP/network-level rate limiting at the edge before public launch.
 - Access tokens are opaque bearer tokens, expire after 12 hours and are stored only as SHA-256 hashes.
 - H2 console remains local-development-only.
-- Add production HTTPS, login/register rate limiting, email verification, password reset, account lockout/abuse controls, CORS allow-list configuration and a refresh-token/device-session policy before public launch.
+- Add production HTTPS, IP/network-level OTP request rate limiting and broader account abuse controls, CORS allow-list configuration and a refresh-token/device-session policy before public launch. SMTP delivery and a production HMAC secret must be configured before enabling OTP login for users.
 - Price-alert records are persisted, but scheduled supplier checks and email/push notifications are not yet implemented. No automatic price monitoring is running yet.
 
 ## Run PostgreSQL compatibility check

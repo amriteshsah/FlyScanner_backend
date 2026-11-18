@@ -30,7 +30,9 @@ public class JdbcAccessTokenSessionRepository {
 
     public Optional<AccountPrincipal> findActivePrincipal(String tokenHash, Instant now) {
         return jdbcTemplate.query("""
-                SELECT u.id, u.email, u.full_name, u.role, u.created_at
+                SELECT u.id, u.email, u.full_name, u.role, u.created_at,
+                       u.phone_number, u.date_of_birth, u.nationality,
+                       u.home_airport, u.preferred_currency, u.profile_completed
                 FROM account.access_token_sessions s
                 JOIN account.users u ON u.id = s.user_id
                 WHERE s.token_hash = ?
@@ -38,13 +40,22 @@ public class JdbcAccessTokenSessionRepository {
                   AND s.expires_at > ?
                   AND u.user_status = 'ACTIVE'
                 """,
-                (rs, rowNum) -> new AccountPrincipal(
-                        rs.getObject("id", UUID.class),
-                        rs.getString("email"),
-                        rs.getString("full_name"),
-                        rs.getString("role"),
-                        rs.getTimestamp("created_at").toInstant()
-                ),
+                (rs, rowNum) -> {
+                    java.sql.Date dateOfBirth = rs.getDate("date_of_birth");
+                    return new AccountPrincipal(
+                            rs.getObject("id", UUID.class),
+                            rs.getString("email"),
+                            rs.getString("full_name"),
+                            rs.getString("role"),
+                            rs.getTimestamp("created_at").toInstant(),
+                            rs.getString("phone_number"),
+                            dateOfBirth == null ? null : dateOfBirth.toLocalDate(),
+                            rs.getString("nationality"),
+                            rs.getString("home_airport"),
+                            rs.getString("preferred_currency"),
+                            rs.getBoolean("profile_completed")
+                    );
+                },
                 tokenHash, Timestamp.from(now)
         ).stream().findFirst();
     }

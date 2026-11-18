@@ -13,6 +13,10 @@ spring:
 
 # Swagger UI and development-only CORS origins are enabled for local API development.
 flyscanner:
+  auth:
+    # Local-only fallback. Set FLYSCANNER_OTP_HMAC_SECRET to a private 32+ byte value.
+    otp-hmac-secret: ${FLYSCANNER_OTP_HMAC_SECRET:flyscanner-local-otp-secret-change-before-deploy-2026}
+    email-from: ${MAIL_FROM:no-reply@flyscanner.local}
   cors:
     # Frontend Vite port and GitHub Codespaces forwarded ports.
     # Override/replace this list for a different development environment.
