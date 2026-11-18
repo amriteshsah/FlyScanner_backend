@@ -1,0 +1,29 @@
+spring:
+  datasource:
+    url: jdbc:h2:mem:flyscanner;MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE
+    driver-class-name: org.h2.Driver
+    username: sa
+    password:
+  h2:
+    console:
+      enabled: true
+      path: /h2-console
+      settings:
+        web-allow-others: false
+
+# Swagger UI and development-only CORS origins are enabled for local API development.
+flyscanner:
+  auth:
+    # Local-only fallback. Set FLYSCANNER_OTP_HMAC_SECRET to a private 32+ byte value.
+    otp-hmac-secret: ${FLYSCANNER_OTP_HMAC_SECRET:flyscanner-local-otp-secret-change-before-deploy-2026}
+    email-from: ${MAIL_FROM:no-reply@flyscanner.local}
+  cors:
+    # Frontend Vite port and GitHub Codespaces forwarded ports.
+    # Override/replace this list for a different development environment.
+    allowed-origin-patterns: "http://localhost:*,http://127.0.0.1:*,https://*.app.github.dev"
+
+springdoc:
+  api-docs:
+    enabled: true
+  swagger-ui:
+    enabled: true

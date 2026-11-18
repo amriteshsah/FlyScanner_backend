@@ -1,0 +1,56 @@
+server:
+  port: ${SERVER_PORT:8080}
+  shutdown: graceful
+
+spring:
+  mail:
+    host: ${SMTP_HOST:}
+    port: ${SMTP_PORT:587}
+    username: ${SMTP_USERNAME:}
+    password: ${SMTP_PASSWORD:}
+    properties:
+      mail:
+        smtp:
+          auth: ${SMTP_AUTH:true}
+          starttls:
+            enable: ${SMTP_STARTTLS:true}
+  application:
+    name: flyscanner-backend
+  profiles:
+    default: local
+  lifecycle:
+    timeout-per-shutdown-phase: 20s
+  datasource:
+    hikari:
+      maximum-pool-size: ${DB_POOL_MAX_SIZE:5}
+      minimum-idle: ${DB_POOL_MIN_IDLE:1}
+      connection-timeout: 3000
+      validation-timeout: 1000
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      show-details: never
+      probes:
+        enabled: true
+  info:
+    env:
+      enabled: false
+
+logging:
+  pattern:
+    level: "%5p [corr:%X{correlationId:-none}]"
+
+# API documentation is disabled outside local development unless explicitly enabled.
+springdoc:
+  api-docs:
+    enabled: ${SWAGGER_ENABLED:false}
+  swagger-ui:
+    enabled: ${SWAGGER_ENABLED:false}
