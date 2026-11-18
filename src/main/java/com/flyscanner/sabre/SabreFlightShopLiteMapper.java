@@ -1,6 +1,5 @@
 package com.flyscanner.sabre;
 
-import com.fasterxml.jackson.databind.JsonNode;
 import com.flyscanner.search.api.dto.FlightSearchRequest;
 import com.flyscanner.search.domain.FlightJourney;
 import com.flyscanner.search.domain.FlightSegment;
@@ -54,41 +53,28 @@ public class SabreFlightShopLiteMapper {
                 "fare", fare, "processingOptions", processing);
     }
 
-    public SupplierSearchResult toSupplierResult(JsonNode root, Instant checkedAt) {
-        JsonNode errors = root.path("errors");
-        if (errors.isArray() && !errors.isEmpty()) {
-            String message = errors.get(0).path("message").asText("Sabre search returned an error.");
+    public SupplierSearchResult toSupplierResult(Map<String, Object> root, Instant checkedAt) {
+        Object errorsValue = root.get("errors");
+        if (errorsValue instanceof List<?> errors && !errors.isEmpty()) {
+            String message = string(asMap(errors.getFirst()).get("message"), "Sabre search returned an error.");
             throw new IllegalStateException("Sabre Flight Shop Lite error: " + message);
         }
 
-        Map<String, JsonNode> flightsById = new HashMap<>();
-        for (JsonNode flight : root.path("flights")) {
-            String id = flight.path("id").asText();
-            if (!id.isBlank()) flightsById.put(id, flight);
-        }
-
-        Map<String, JsonNode> journeysById = new HashMap<>();
-        for (JsonNode journey : root.path("journeys")) {
-            String id = journey.path("id").asText();
-            if (!id.isBlank()) journeysById.put(id, journey);
-        }
+        Map<String, Map<String, Object>> flightsById = indexById(root.get("flights"));
+        Map<String, Map<String, Object>> journeysById = indexById(root.get("journeys"));
 
         List<SupplierOffer> offers = new ArrayList<>();
-        for (JsonNode offer : root.path("offers")) {
-            String offerId = offer.path("id").asText();
-            JsonNode totalPrice = offer.path("totalPrice");
-            if (offerId.isBlank() || totalPrice.isMissingNode()
-                    || totalPrice.path("amount").asText().isBlank()) {
-                continue;
-            }
+        for (Object offerValue : asList(root.get("offers"))) {
+            Map<String, Object> offer = asMap(offerValue);
+            String offerId = string(offer.get("id"), "");
+            Map<String, Object> totalPrice = asMap(offer.get("totalPrice"));
+            if (offerId.isBlank() || string(totalPrice.get("amount"), "").isBlank()) continue;
 
-            List<JsonNode> referencedJourneys = new ArrayList<>();
-            JsonNode journeyRefs = offer.path("journeyRefs");
-            if (journeyRefs.isArray()) {
-                for (JsonNode ref : journeyRefs) {
-                    JsonNode journey = journeysById.get(ref.asText());
-                    if (journey != null) referencedJourneys.add(journey);
-                }
+            List<Map<String, Object>> referencedJourneys = new ArrayList<>();
+            for (Object refValue : asList(offer.get("journeyRefs"))) {
+                String ref = string(refValue, "");
+                Map<String, Object> journey = journeysById.get(ref);
+                if (journey != null) referencedJourneys.add(journey);
             }
             if (referencedJourneys.isEmpty()) continue;
 
@@ -96,19 +82,16 @@ public class SabreFlightShopLiteMapper {
             int totalStops = 0;
             int totalDuration = 0;
             int legNumber = 1;
-            for (JsonNode journey : referencedJourneys) {
+            for (Map<String, Object> journey : referencedJourneys) {
                 List<FlightSegment> segments = new ArrayList<>();
-                JsonNode refs = journey.path("flightRefs");
-                if (refs.isArray()) {
-                    for (JsonNode ref : refs) {
-                        JsonNode flight = flightsById.get(ref.asText());
-                        if (flight != null) segments.add(toSegment(flight));
-                    }
+                for (Object refValue : asList(journey.get("flightRefs"))) {
+                    Map<String, Object> flight = flightsById.get(string(refValue, ""));
+                    if (flight != null) segments.add(toSegment(flight));
                 }
                 if (segments.isEmpty()) continue;
 
-                FlightSegment first = segments.get(0);
-                FlightSegment last = segments.get(segments.size() - 1);
+                FlightSegment first = segments.getFirst();
+                FlightSegment last = segments.getLast();
                 int stopCount = Math.max(0, segments.size() - 1);
                 int duration = Math.max(0, (int) Duration.between(first.departureAt(), last.arrivalAt()).toMinutes());
                 mappedJourneys.add(new FlightJourney(legNumber++,
@@ -120,41 +103,68 @@ public class SabreFlightShopLiteMapper {
             }
             if (mappedJourneys.isEmpty()) continue;
 
-            BigDecimal amount = new BigDecimal(totalPrice.path("amount").asText());
-            String currency = totalPrice.path("currencyCode").asText("USD");
-            Instant expiresAt = parseInstant(offer.path("validUntil").asText(), checkedAt.plus(Duration.ofMinutes(5)));
+            BigDecimal amount = new BigDecimal(string(totalPrice.get("amount"), "0"));
+            String currency = string(totalPrice.get("currencyCode"), "USD");
+            Instant expiresAt = parseInstant(string(offer.get("validUntil"), ""), checkedAt.plus(Duration.ofMinutes(5)));
             offers.add(new SupplierOffer(offerId, new Money(amount, currency),
                     mappedJourneys, totalStops, totalDuration, expiresAt));
         }
         return new SupplierSearchResult(offers);
     }
 
-    private FlightSegment toSegment(JsonNode flight) {
-        LocalDate departureDate = LocalDate.parse(flight.path("departureDate").asText());
-        LocalTime departureTime = LocalTime.parse(flight.path("departureTime").asText("00:00"));
-        LocalDate arrivalDate = LocalDate.parse(flight.path("arrivalDate").asText());
-        LocalTime arrivalTime = LocalTime.parse(flight.path("arrivalTime").asText("00:00"));
+    private FlightSegment toSegment(Map<String, Object> flight) {
+        LocalDate departureDate = LocalDate.parse(string(flight.get("departureDate"), ""));
+        LocalTime departureTime = LocalTime.parse(string(flight.get("departureTime"), "00:00"));
+        LocalDate arrivalDate = LocalDate.parse(string(flight.get("arrivalDate"), ""));
+        LocalTime arrivalTime = LocalTime.parse(string(flight.get("arrivalTime"), "00:00"));
 
         // Sabre returns airport-local date/time. FlyScanner's current domain uses Instant;
         // UTC is a temporary normalization until airport timezone metadata is introduced.
         Instant departure = LocalDateTime.of(departureDate, departureTime).toInstant(ZoneOffset.UTC);
         Instant arrival = LocalDateTime.of(arrivalDate, arrivalTime).toInstant(ZoneOffset.UTC);
-        int duration = Math.max(0, flight.path("durationInMinutes").asInt(
-                (int) Duration.between(departure, arrival).toMinutes()));
+        int duration = number(flight.get("durationInMinutes"),
+                (int) Duration.between(departure, arrival).toMinutes());
 
-        String carrier = flight.path("marketingAirlineCode").asText(
-                flight.path("operatingAirlineCode").asText("UNKNOWN"));
-        String number = flight.path("marketingFlightNumber").asText(
-                flight.path("operatingFlightNumber").asText(""));
+        String carrier = string(flight.get("marketingAirlineCode"),
+                string(flight.get("operatingAirlineCode"), "UNKNOWN"));
+        String number = string(flight.get("marketingFlightNumber"),
+                string(flight.get("operatingFlightNumber"), ""));
         return new FlightSegment(
-                flight.path("departureAirportCode").asText(),
-                flight.path("arrivalAirportCode").asText(),
+                string(flight.get("departureAirportCode"), ""),
+                string(flight.get("arrivalAirportCode"), ""),
                 carrier,
                 number,
                 departure,
                 arrival,
-                duration
+                Math.max(0, duration)
         );
+    }
+
+    private Map<String, Map<String, Object>> indexById(Object value) {
+        Map<String, Map<String, Object>> result = new HashMap<>();
+        for (Object item : asList(value)) {
+            Map<String, Object> map = asMap(item);
+            String id = string(map.get("id"), "");
+            if (!id.isBlank()) result.put(id, map);
+        }
+        return result;
+    }
+
+    @SuppressWarnings("unchecked")
+    private Map<String, Object> asMap(Object value) {
+        return value instanceof Map<?, ?> map ? (Map<String, Object>) map : Map.of();
+    }
+
+    private List<?> asList(Object value) {
+        return value instanceof List<?> list ? list : List.of();
+    }
+
+    private String string(Object value, String fallback) {
+        return value == null ? fallback : value.toString();
+    }
+
+    private int number(Object value, int fallback) {
+        return value instanceof Number number ? number.intValue() : fallback;
     }
 
     private Instant parseInstant(String value, Instant fallback) {
