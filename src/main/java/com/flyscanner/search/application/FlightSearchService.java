@@ -158,7 +158,7 @@ public class FlightSearchService {
         );
     }
 
-    private FlightSearchStatus determineStatus(
+\n    private String disclaimerFor(List<ProviderExecution> executions) {\n        boolean sabre = executions.stream().anyMatch(execution -> "SABRE".equals(execution.providerCode()));\n        boolean mock = executions.stream().anyMatch(execution -> "MOCK".equals(execution.providerCode()));\n        if (sabre && mock) return "Results may include Sabre Sandbox and synthetic mock offers; verify provider status before use.";\n        if (sabre) return SABRE_DISCLAIMER;\n        return MOCK_DISCLAIMER;\n    }\n\n    private FlightSearchStatus determineStatus(
             List<ProviderExecution> executions, List<FlightOfferResponse> offers) {
         if (!offers.isEmpty()) {
             boolean failedProvider = executions.stream().anyMatch(execution ->
