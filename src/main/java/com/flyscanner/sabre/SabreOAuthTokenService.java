@@ -48,24 +48,19 @@ public class SabreOAuthTokenService {
         String combined = encodedEpr + ":" + encodedPassword;
         String basicCredentials = Base64.getEncoder().encodeToString(combined.getBytes(StandardCharsets.UTF_8));
 
-        TokenResponse response = restClient.post()
+        Map<?, ?> response = restClient.post()
                 .uri(properties.getTokenUrl())
                 .contentType(MediaType.APPLICATION_FORM_URLENCODED)
                 .header("Authorization", "Basic " + basicCredentials)
                 .body("grant_type=client_credentials")
                 .retrieve()
-                .body(TokenResponse.class);
+                .body(Map.class);
 
-        if (response == null || response.accessToken() == null || response.accessToken().isBlank()) {
+        if (response == null || !(response.get("access_token") instanceof String token) || token.isBlank()) {
             throw new IllegalStateException("Sabre OAuth returned an empty access token.");
         }
-        long expiresIn = response.expiresIn() > 0 ? response.expiresIn() : 3600;
-        return new CachedToken(response.accessToken(), Instant.now().plusSeconds(expiresIn));
-    }
-
-    private record TokenResponse(String access_token, long expires_in, String token_type) {
-        String accessToken() { return access_token; }
-        long expiresIn() { return expires_in; }
+        long expiresIn = response.get("expires_in") instanceof Number value ? value.longValue() : 3600;
+        return new CachedToken(token, Instant.now().plusSeconds(expiresIn));
     }
 
     private record CachedToken(String value, Instant expiresAt) {
