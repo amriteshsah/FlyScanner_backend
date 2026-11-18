@@ -50,6 +50,33 @@ class LocalDatabaseMigrationTest {
     }
 
     @Test
+    void persistsInfantCountWithTheSearchSnapshot() {
+        FlightSearchRequest request = new FlightSearchRequest(
+                TripType.ONE_WAY,
+                List.of(new FlightLegRequest("BLR", "DXB", LocalDate.now().plusDays(20))),
+                new PassengerRequest(1, List.of(), 1),
+                CabinClass.ECONOMY,
+                "INR",
+                "IN",
+                "en-IN"
+        );
+
+        var response = flightSearchService.search(request);
+        String searchId = response.searchId().toString();
+
+        assertEquals(1, jdbcTemplate.queryForObject(
+                "SELECT adult_count FROM search.flight_searches WHERE id = ?",
+                Integer.class,
+                searchId
+        ));
+        assertEquals(1, jdbcTemplate.queryForObject(
+                "SELECT infant_count FROM search.flight_searches WHERE id = ?",
+                Integer.class,
+                searchId
+        ));
+    }
+
+    @Test
     void savesSearchOffersJourneysAndSegmentsToH2() {
         FlightSearchRequest request = new FlightSearchRequest(
                 TripType.ONE_WAY,
