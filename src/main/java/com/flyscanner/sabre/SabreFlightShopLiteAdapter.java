@@ -37,7 +37,7 @@ public class SabreFlightShopLiteAdapter implements FlightSupplierAdapter {
         JsonNode response = restClient.post()
                 .uri("/v1/offers/flightShopLite")
                 .header("Authorization", "Bearer " + token)
-                .body(mapper.toRequestPayload(request, properties.getMaxOffers()))
+                .body(mapper.toRequestPayload(request, properties))
                 .retrieve()
                 .body(JsonNode.class);
         if (response == null) {
