@@ -10,4 +10,5 @@ flyscanner:
     group: ${SABRE_GROUP:}
     domain: ${SABRE_DOMAIN:}
     password: ${SABRE_PASSWORD:}
+    pcc: ${SABRE_PCC:}
     max-offers: ${SABRE_MAX_OFFERS:30}
