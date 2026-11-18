@@ -22,7 +22,7 @@ import java.util.Map;
 
 public class SabreFlightShopLiteMapper {
 
-    public Map<String, Object> toRequestPayload(FlightSearchRequest request, int offerLimit) {
+    public Map<String, Object> toRequestPayload(FlightSearchRequest request, SabreProperties properties) {
         List<Map<String, Object>> journeys = request.legs().stream().map(leg -> Map.<String, Object>of(
                 "departureLocation", Map.of("airportCode", leg.origin()),
                 "arrivalLocation", Map.of("airportCode", leg.destination()),
@@ -44,7 +44,11 @@ public class SabreFlightShopLiteMapper {
 
         Map<String, Object> cabin = Map.of("name", cabinName(request.cabinClass().name()));
         Map<String, Object> fare = Map.of("currencyCode", request.currency(), "cabin", cabin);
-        Map<String, Object> processing = Map.of("limitNumberOfOffers", Math.max(1, Math.min(offerLimit, 1000)));
+        Map<String, Object> processing = new HashMap<>();
+        processing.put("limitNumberOfOffers", Math.max(1, Math.min(properties.getMaxOffers(), 1000)));
+        if (properties.getPcc() != null && !properties.getPcc().isBlank()) {
+            processing.put("pseudoCityCode", properties.getPcc());
+        }
 
         return Map.of("journeys", journeys, "travelers", travelers,
                 "fare", fare, "processingOptions", processing);
@@ -86,9 +90,7 @@ public class SabreFlightShopLiteMapper {
                     if (journey != null) referencedJourneys.add(journey);
                 }
             }
-            if (referencedJourneys.isEmpty()) {
-                journeysById.values().forEach(referencedJourneys::add);
-            }
+            if (referencedJourneys.isEmpty()) continue;
 
             List<FlightJourney> mappedJourneys = new ArrayList<>();
             int totalStops = 0;
