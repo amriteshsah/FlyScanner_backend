@@ -11,6 +11,7 @@ public class SabreProperties {
     private String group = "";
     private String domain = "";
     private String password = "";
+    private String pcc = "";
     private int maxOffers = 30;
 
     public boolean isEnabled() { return enabled; }
@@ -27,6 +28,8 @@ public class SabreProperties {
     public void setDomain(String domain) { this.domain = domain; }
     public String getPassword() { return password; }
     public void setPassword(String password) { this.password = password; }
+    public String getPcc() { return pcc; }
+    public void setPcc(String pcc) { this.pcc = pcc; }
     public int getMaxOffers() { return maxOffers; }
     public void setMaxOffers(int maxOffers) { this.maxOffers = maxOffers; }
 }
