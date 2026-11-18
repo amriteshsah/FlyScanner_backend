@@ -24,7 +24,9 @@ class SabreFlightShopLiteMapperTest {
                 List.of(new FlightLegRequest("BLR", "DXB", LocalDate.of(2027, 1, 15))),
                 new PassengerRequest(2, List.of(6), 1));
 
-        SabreProperties properties = new SabreProperties();\n        properties.setMaxOffers(30);\n        var payload = mapper.toRequestPayload(request, properties);
+        SabreProperties properties = new SabreProperties();
+        properties.setMaxOffers(30);
+        var payload = mapper.toRequestPayload(request, properties);
 
         assertEquals(1, ((List<?>) payload.get("journeys")).size());
         assertEquals(4, ((List<?>) payload.get("travelers")).size());
