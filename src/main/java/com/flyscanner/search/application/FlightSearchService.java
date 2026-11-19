@@ -34,8 +34,10 @@ import java.util.concurrent.TimeoutException;
 public class FlightSearchService {
 
     private static final Logger log = LoggerFactory.getLogger(FlightSearchService.class);
-    private static final String DISCLAIMER =
+    private static final String MOCK_DISCLAIMER =
             "MOCK DATA ONLY: schedules and prices are illustrative, not live or bookable.";
+    private static final String SABRE_DISCLAIMER =
+            "Sabre Sandbox offers are test data and are not guaranteed to be bookable.";
 
     private final List<FlightSupplierAdapter> adapters;
     private final Executor supplierSearchExecutor;
@@ -87,7 +89,7 @@ public class FlightSearchService {
                 determineStatus(executions, offers),
                 statuses,
                 offers,
-                DISCLAIMER
+                disclaimerFor(executions)
         );
         resultRepository.save(request, response);
         return response;
@@ -146,7 +148,7 @@ public class FlightSearchService {
     private FlightOfferResponse toResponse(
             String providerCode, SupplierOffer offer, Instant checkedAt) {
         return new FlightOfferResponse(
-                UUID.randomUUID().toString(),
+                "SABRE".equals(providerCode) ? offer.supplierReference() : UUID.randomUUID().toString(),
                 providerCode,
                 offer.price(),
                 offer.journeys(),
@@ -156,6 +158,15 @@ public class FlightSearchService {
                 offer.expiresAt(),
                 false
         );
+    }
+
+
+    private String disclaimerFor(List<ProviderExecution> executions) {
+        boolean sabre = executions.stream().anyMatch(execution -> "SABRE".equals(execution.providerCode()));
+        boolean mock = executions.stream().anyMatch(execution -> "MOCK".equals(execution.providerCode()));
+        if (sabre && mock) return "Results may include Sabre Sandbox and synthetic mock offers; verify provider status before use.";
+        if (sabre) return SABRE_DISCLAIMER;
+        return MOCK_DISCLAIMER;
     }
 
     private FlightSearchStatus determineStatus(

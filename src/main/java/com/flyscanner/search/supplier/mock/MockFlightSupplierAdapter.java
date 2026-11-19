@@ -8,6 +8,7 @@ import com.flyscanner.search.domain.Money;
 import com.flyscanner.search.domain.SupplierOffer;
 import com.flyscanner.search.domain.SupplierSearchResult;
 import com.flyscanner.search.supplier.FlightSupplierAdapter;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
 import java.math.BigDecimal;
@@ -21,6 +22,8 @@ import java.util.UUID;
 
 /** Synthetic fixture data for development. These fares and schedules are not bookable. */
 @Component
+@ConditionalOnProperty(prefix = "flyscanner.search", name = "mock-enabled", havingValue = "true", matchIfMissing = true)
+@ConditionalOnProperty(prefix = "flyscanner.sabre", name = "enabled", havingValue = "false", matchIfMissing = true)
 public class MockFlightSupplierAdapter implements FlightSupplierAdapter {
 
     private static final int[] ONE_WAY_PRICES_INR = {12_650, 11_350, 9_850};
@@ -60,7 +63,6 @@ public class MockFlightSupplierAdapter implements FlightSupplierAdapter {
 
             offers.add(new SupplierOffer(
                     "MOCK-" + UUID.randomUUID(),
-                    // Illustrative fixture only: all passengers are priced equally here.
                     new Money(BigDecimal.valueOf((long) prices[option] * partySize).setScale(2), "INR"),
                     journeys,
                     totalStops,

@@ -22,6 +22,8 @@ The first release is a modular monolith: one deployable Spring Boot application 
 
 No real flight supplier, affiliate partner or AWS resources are connected yet. Email login uses configurable SMTP delivery. Mock fares and schedules are synthetic and not bookable.
 
+Sabre Flight Shop Lite Sandbox integration is being developed on `feature/sabre-flightshop-lite`. It is opt-in and disabled in the default local profile. See [`docs/sabre-flightshop-lite.md`](docs/sabre-flightshop-lite.md) for credentials and setup.
+
 ## Prerequisites
 
 - JDK 21
