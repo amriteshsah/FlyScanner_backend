@@ -23,6 +23,7 @@ import java.util.UUID;
 /** Synthetic fixture data for development. These fares and schedules are not bookable. */
 @Component
 @ConditionalOnProperty(prefix = "flyscanner.search", name = "mock-enabled", havingValue = "true", matchIfMissing = true)
+@ConditionalOnProperty(prefix = "flyscanner.sabre", name = "enabled", havingValue = "false", matchIfMissing = true)
 public class MockFlightSupplierAdapter implements FlightSupplierAdapter {
 
     private static final int[] ONE_WAY_PRICES_INR = {12_650, 11_350, 9_850};
